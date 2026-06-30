@@ -1,0 +1,51 @@
+{
+  "name": "waifu2x-brainjs",
+  "version": "0.1.0",
+  "description": "A faithful TypeScript port of waifu2x (image super-resolution and noise reduction) that runs the convolutional networks through brain.js.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "waifu2x-brainjs": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint --format agent",
+    "lint:fix": "oxlint --fix",
+    "lint:strict": "oxlint --deny-warnings",
+    "test": "vitest run",
+    "cli": "tsx src/cli.ts",
+    "download-models": "tsx scripts/download-models.ts"
+  },
+  "dependencies": {
+    "brain.js": "2.0.0-beta.24",
+    "jpeg-js": "0.4.4",
+    "pngjs": "7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/pngjs": "6.0.5",
+    "oxlint": "^1.72.0",
+    "prettier": "3.4.2",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}

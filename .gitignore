@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+*.tsbuildinfo
+.DS_Store
+/models/**/*.json
+!/models/.gitkeep
+/tmp-out
+*.local
