@@ -5,7 +5,7 @@ import { basename, dirname, extname, join } from "node:path";
 import { loadImage, savePng } from "./image/io.js";
 import { loadModelFile, scaleImage } from "./pipeline.js";
 import type { ScaleOptions } from "./pipeline.js";
-import { isGpuAvailable } from "./brain/loader.js";
+import { isGpuAvailable } from "./engine/gpuConv.js";
 
 const BUNDLED_MODEL_DIR = fileURLToPath(new URL("../models/mlpconv", import.meta.url));
 

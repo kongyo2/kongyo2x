@@ -14,7 +14,7 @@ export { createTensor, fromData, cloneTensor, stackChannels, clamp01 } from "./c
 export { runModel } from "./engine/runModel.js";
 export { buildNetwork, convNetworkJSON, LEAKY_RELU_ALPHA, IDENTITY_ALPHA } from "./brain/network.js";
 export type { BrainNetworkJSON, BrainNeuralNetwork } from "./brain/network.js";
-export { isGpuAvailable } from "./brain/loader.js";
+export { isGpuAvailable } from "./engine/gpuConv.js";
 export { reconstructScale, reconstructScaleY, reconstructScaleRgb } from "./reconstruct.js";
 export type { ReconstructOptions } from "./reconstruct.js";
 export { loadModelFile, loadModelFromJson, scaleImage } from "./pipeline.js";

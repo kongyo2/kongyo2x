@@ -23,20 +23,20 @@ interface KernelThis {
   };
 }
 
-type ConvKernel = (input: Float32Array, weights: Float32Array, bias: Float32Array) => ArrayLike<number>;
+type KernelFn = (this: KernelThis, ...inputs: Float32Array[]) => number;
+type CompiledKernel = (...inputs: Float32Array[]) => ArrayLike<number>;
 
 interface KernelSettings {
   output: [number];
-  constants: KernelThis["constants"];
-  loopMaxIterations: number;
   precision: "single";
+  constants?: KernelThis["constants"];
+  loopMaxIterations?: number;
 }
 
 interface GpuInstance {
-  createKernel(
-    fn: (this: KernelThis, input: Float32Array, weights: Float32Array, bias: Float32Array) => number,
-    settings: KernelSettings,
-  ): ConvKernel;
+  mode: string;
+  createKernel(fn: KernelFn, settings: KernelSettings): CompiledKernel;
+  destroy(): void;
 }
 
 interface GpuModule {
@@ -70,20 +70,79 @@ function convKernel(this: KernelThis, input: Float32Array, weights: Float32Array
   return Math.max(sum, this.constants.alpha * sum);
 }
 
+function probeKernel(this: KernelThis, x: Float32Array): number {
+  return (x[this.thread.x] as number) + 1;
+}
+
+const nodeRequire = createRequire(import.meta.url);
+
+function createGpu(): GpuInstance {
+  const { GPU } = nodeRequire("gpu.js") as GpuModule;
+  return new GPU();
+}
+
+function destroyGpu(instance: GpuInstance): void {
+  try {
+    instance.destroy();
+  } catch {
+    /* a half-initialized context may not destroy cleanly; nothing to recover */
+  }
+}
+
 let gpu: GpuInstance | undefined;
+let available: boolean | undefined;
+
+function probeGpu(): boolean {
+  if (process.env.KONGYO2X_DISABLE_GPU === "1" || process.env.KONGYO2X_GPU === "0") {
+    return false;
+  }
+  let instance: GpuInstance | undefined;
+  try {
+    instance = createGpu();
+    if (instance.mode === "cpu" || instance.mode === "dev") {
+      destroyGpu(instance);
+      return false;
+    }
+    const kernel = instance.createKernel(probeKernel, { output: [1], precision: "single" });
+    const value = kernel(new Float32Array([1]))[0];
+    if (typeof value !== "number" || Math.abs(value - 2) > 1e-3) {
+      destroyGpu(instance);
+      return false;
+    }
+    gpu = instance;
+    return true;
+  } catch {
+    if (instance) {
+      destroyGpu(instance);
+    }
+    return false;
+  }
+}
+
+export function isGpuAvailable(): boolean {
+  if (available === undefined) {
+    available = probeGpu();
+  }
+  return available;
+}
 
 function getGpu(): GpuInstance {
   if (!gpu) {
-    const require = createRequire(import.meta.url);
-    const { GPU } = require("gpu.js") as GpuModule;
-    gpu = new GPU();
+    gpu = createGpu();
   }
   return gpu;
 }
 
-const kernels = new Map<string, ConvKernel>();
+const kernels = new Map<string, CompiledKernel>();
 
-function kernelFor(layer: ConvLayer, inH: number, inW: number, outH: number, outW: number, alpha: number): ConvKernel {
+function kernelFor(
+  layer: ConvLayer,
+  inH: number,
+  inW: number,
+  outH: number,
+  outW: number,
+  alpha: number,
+): CompiledKernel {
   const weightStride = layer.inputPlanes * layer.kernelHeight * layer.kernelWidth;
   const key = [
     layer.inputPlanes,

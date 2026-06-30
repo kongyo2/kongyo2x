@@ -1,10 +1,9 @@
 import type { Tensor } from "../core/tensor.js";
 import type { Kongyo2xModel } from "../model/model.js";
 import type { ModelLayer } from "../model/types.js";
-import { isGpuAvailable } from "../brain/loader.js";
 import { spatialFullConvolution } from "./deconv.js";
 import { brainConvForward } from "./brainConv.js";
-import { gpuConvForward } from "./gpuConv.js";
+import { gpuConvForward, isGpuAvailable } from "./gpuConv.js";
 
 export function runModel(model: Kongyo2xModel, input: Tensor): Tensor {
   const useGpu = isGpuAvailable();

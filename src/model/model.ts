@@ -151,11 +151,15 @@ export class Kongyo2xModel {
     if (cached) {
       return cached;
     }
-    const layer = this.convJSON[index];
-    if (!layer) {
+    const net = this.convNets[index];
+    if (!net) {
       return undefined;
     }
-    const dense = layer.network.layers[1];
+    const network = net.toJSON();
+    if (network.options.activation !== "leaky-relu" || network.trainOpts.activation !== "leaky-relu") {
+      return undefined;
+    }
+    const dense = network.layers[1];
     if (!dense) {
       return undefined;
     }
@@ -172,7 +176,7 @@ export class Kongyo2xModel {
     const params: ConvParams = {
       weights,
       bias: Float32Array.from(dense.biases),
-      alpha: layer.network.trainOpts.leakyReluAlpha,
+      alpha: network.trainOpts.leakyReluAlpha,
     };
     this.convParamsCache[index] = params;
     return params;
