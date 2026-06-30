@@ -3,7 +3,7 @@ import { Kongyo2xModel } from "./model/model.js";
 import type { Kongyo2xModelJSON } from "./model/types.js";
 import type { Tensor } from "./core/tensor.js";
 import { stackChannels } from "./core/tensor.js";
-import { reconstructImage, reconstructScale } from "./reconstruct.js";
+import { reconstructScale } from "./reconstruct.js";
 import type { ReconstructOptions } from "./reconstruct.js";
 import { rgb2y } from "./image/color.js";
 import { makeBorder } from "./image/alpha.js";
@@ -32,11 +32,6 @@ export function loadModelFromJson(json: Kongyo2xModelJSON): Kongyo2xModel {
 export async function loadModelFile(path: string): Promise<Kongyo2xModel> {
   const text = await readFile(path, "utf8");
   return Kongyo2xModel.fromJSON(JSON.parse(text) as Kongyo2xModelJSON);
-}
-
-export function denoise(model: Kongyo2xModel, input: ImageInput, options: ReconstructOptions = {}): ProcessedImage {
-  const rgb = reconstructImage(model, input.rgb, options);
-  return input.alpha ? { rgb, alpha: input.alpha } : { rgb };
 }
 
 function upscaleAlpha(
@@ -75,32 +70,4 @@ export function scaleImage(
   }
   const alpha = upscaleAlpha(alphaModel, scale, input.alpha, options.alphaScale ?? "model", reconstructOptions);
   return { rgb, alpha };
-}
-
-export function denoiseThenScale(
-  noiseModel: Kongyo2xModel,
-  scaleModel: Kongyo2xModel,
-  scale: number,
-  input: ImageInput,
-  options: ScaleOptions = {},
-): ProcessedImage {
-  const reconstructOptions = reconstructOptionsOf(options);
-  const bordered = input.alpha ? makeBorder(input.rgb, input.alpha, scaleModel.meta.offset) : input.rgb;
-  const denoised = reconstructImage(noiseModel, bordered, reconstructOptions);
-  const rgb = reconstructScale(scaleModel, scale, denoised, reconstructOptions);
-  if (!input.alpha) {
-    return { rgb };
-  }
-  const alpha = upscaleAlpha(scaleModel, scale, input.alpha, options.alphaScale ?? "model", reconstructOptions);
-  return { rgb, alpha };
-}
-
-export function noiseScaleCombined(
-  noiseScaleModel: Kongyo2xModel,
-  scale: number,
-  input: ImageInput,
-  options: ScaleOptions = {},
-  scaleModel: Kongyo2xModel = noiseScaleModel,
-): ProcessedImage {
-  return scaleImage(noiseScaleModel, scale, input, options, scaleModel);
 }

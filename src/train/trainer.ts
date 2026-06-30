@@ -55,7 +55,7 @@ export function defaultTrainConfig(overrides: Partial<TrainConfig> = {}): TrainC
   return {
     channels: 1,
     width: 20,
-    degradation: { kind: "noise", noiseSigma: 0.03, scale: 1 },
+    degradation: { scale: 2 },
     iterations: 600,
     batchSize: 8,
     patchSize: 40,
@@ -117,7 +117,7 @@ export function trainModel(
   const valItems: ValItem[] = [];
   for (let i = 0; i < config.valBatch; i++) {
     const clean = dataset.sample(config.patchSize, valRng);
-    const input = degrade(clean, config.degradation, valRng);
+    const input = degrade(clean, config.degradation);
     valItems.push({
       input,
       target: centerTarget(clean, offset),
@@ -138,7 +138,7 @@ export function trainModel(
     let lossSum = 0;
     for (let b = 0; b < config.batchSize; b++) {
       const clean = dataset.sample(config.patchSize, rng);
-      const input = degrade(clean, config.degradation, rng);
+      const input = degrade(clean, config.degradation);
       const cache = network.forward(input);
       const target = centerTarget(clean, offset);
       const { loss, grad } = computeLoss(cache.output, target, config.loss);
@@ -183,7 +183,7 @@ export function trainModel(
     archName: "mlpconv",
     channels: config.channels,
     offset,
-    scaleFactor: config.degradation.kind === "scale" ? config.degradation.scale : 1,
+    scaleFactor: config.degradation.scale,
     resize: false,
   };
 

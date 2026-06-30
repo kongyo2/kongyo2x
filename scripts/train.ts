@@ -2,20 +2,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import {
-  defaultTrainConfig,
-  trainModel,
-  SyntheticDataset,
-  ImageDataset,
-  noiseSigmaForLevel,
-} from "../src/train/index.js";
-import type { Dataset, Degradation, LossKind, TrainConfig, TrainProgress } from "../src/train/index.js";
-
-type Method = "noise" | "scale";
+import { defaultTrainConfig, trainModel, SyntheticDataset, ImageDataset } from "../src/train/index.js";
+import type { Dataset, LossKind, TrainConfig, TrainProgress } from "../src/train/index.js";
 
 interface TrainCliOptions {
-  method: Method;
-  noiseLevel: number;
   scale: number;
   dataDir: string | undefined;
   output: string;
@@ -23,15 +13,13 @@ interface TrainCliOptions {
   quiet: boolean;
 }
 
-const HELP = `kongyo2x train - train an MLPconv super-resolution / denoise model from scratch
+const HELP = `kongyo2x train - train an MLPconv super-resolution model from scratch
 
 Usage:
   npm run train -- [options]
 
 Options:
-  -m, --method <method>     noise | scale                         (default: noise)
-  -n, --noise <level>       denoise level 0-3                     (default: 1)
-  -s, --scale <factor>      upscale factor (method=scale)         (default: 2)
+  -s, --scale <factor>      upscale factor                        (default: 2)
       --data <dir>          directory of training images (PNG/JPEG); synthetic if omitted
   -o, --output <path>       output model JSON path
   -d, --model-dir <path>    output directory                      (default: ./models/mlpconv)
@@ -58,8 +46,6 @@ function parse(argv: string[]): TrainCliOptions {
   const { values } = parseArgs({
     args: argv,
     options: {
-      method: { type: "string", short: "m", default: "noise" },
-      noise: { type: "string", short: "n", default: "1" },
       scale: { type: "string", short: "s", default: "2" },
       data: { type: "string" },
       output: { type: "string", short: "o" },
@@ -82,17 +68,9 @@ function parse(argv: string[]): TrainCliOptions {
     process.exit(0);
   }
 
-  const method = values.method as Method;
-  if (method !== "noise" && method !== "scale") {
-    throw new Error(`invalid method: ${values.method} (expected noise|scale)`);
-  }
   const loss = values.loss as LossKind;
   if (loss !== "charbonnier" && loss !== "mse") {
     throw new Error(`invalid loss: ${values.loss} (expected charbonnier|mse)`);
-  }
-  const noiseLevel = parseInteger(values.noise as string, "noise level", 0);
-  if (noiseLevel > 3) {
-    throw new Error(`invalid noise level: ${values.noise} (expected 0-3)`);
   }
   const scale = parseInteger(values.scale as string, "scale", 1);
   const lr = Number.parseFloat(values.lr as string);
@@ -100,13 +78,8 @@ function parse(argv: string[]): TrainCliOptions {
     throw new Error(`invalid lr: ${values.lr}`);
   }
 
-  const degradation: Degradation =
-    method === "scale"
-      ? { kind: "scale", noiseSigma: 0, scale }
-      : { kind: "noise", noiseSigma: noiseSigmaForLevel(noiseLevel), scale: 1 };
-
   const config = defaultTrainConfig({
-    degradation,
+    degradation: { scale },
     iterations: parseInteger(values.iterations as string, "iterations", 1),
     batchSize: parseInteger(values.batch as string, "batch", 1),
     patchSize: parseInteger(values.patch as string, "patch", 8),
@@ -117,12 +90,9 @@ function parse(argv: string[]): TrainCliOptions {
   });
 
   const modelDir = values["model-dir"] as string;
-  const fileName = method === "scale" ? `scale${scale.toFixed(1)}x_model.json` : `noise${noiseLevel}_model.json`;
-  const output = values.output ?? join(modelDir, fileName);
+  const output = values.output ?? join(modelDir, `scale${scale.toFixed(1)}x_model.json`);
 
   return {
-    method,
-    noiseLevel,
     scale,
     dataDir: values.data,
     output,
@@ -149,7 +119,7 @@ async function main(): Promise<void> {
   const dataset = await buildDataset(options);
   const source = options.dataDir ?? "synthetic";
   log(
-    `training ${options.method} model (${source} data, ${options.config.iterations} iters, ` +
+    `training scale ${options.scale}x model (${source} data, ${options.config.iterations} iters, ` +
       `batch ${options.config.batchSize}, patch ${options.config.patchSize}, width ${options.config.width})`,
   );
 
@@ -172,7 +142,7 @@ async function main(): Promise<void> {
   log(
     `done in ${seconds}s  final ${result.finalValPsnr.toFixed(2)}dB  ` +
       `(start ${result.initialValPsnr.toFixed(2)}dB, baseline ${result.baselinePsnr.toFixed(2)}dB)  ` +
-      `gain vs noisy ${gain >= 0 ? "+" : ""}${gain.toFixed(2)}dB${result.usedEma ? "  (ema)" : ""}`,
+      `gain vs baseline ${gain >= 0 ? "+" : ""}${gain.toFixed(2)}dB${result.usedEma ? "  (ema)" : ""}`,
   );
   process.stdout.write(`wrote ${options.output} (${(json.length / 1024).toFixed(0)} KB)\n`);
 }

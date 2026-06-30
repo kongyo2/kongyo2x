@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Kongyo2xModel } from "../src/model/model.js";
-import { reconstructImage, reconstructScale } from "../src/reconstruct.js";
-import { denoise, scaleImage } from "../src/pipeline.js";
+import { reconstructScale } from "../src/reconstruct.js";
+import { scaleImage } from "../src/pipeline.js";
 import { vggLikeModel, upconvLikeModel, randomImage, maxAbsDiff } from "./helpers.js";
 
 describe("model metadata", () => {
@@ -27,8 +27,8 @@ describe("model JSON round-trip", () => {
     const model = Kongyo2xModel.fromJSON(vggLikeModel(1));
     const round = Kongyo2xModel.fromJSON(model.toJSON());
     const image = randomImage(3, 24, 24, 5);
-    const a = reconstructImage(model, image, { blockSize: 32 });
-    const b = reconstructImage(round, image, { blockSize: 32 });
+    const a = reconstructScale(model, 2, image, { blockSize: 32 });
+    const b = reconstructScale(round, 2, image, { blockSize: 32 });
     expect(maxAbsDiff(a, b)).toBe(0);
   });
 
@@ -42,22 +42,12 @@ describe("model JSON round-trip", () => {
   });
 });
 
-describe("denoise", () => {
-  it("keeps the image dimensions", () => {
-    const model = Kongyo2xModel.fromJSON(vggLikeModel(1));
-    const image = { rgb: randomImage(3, 24, 28, 21) };
-    const out = denoise(model, image, { blockSize: 32 });
-    expect(out.rgb.width).toBe(28);
-    expect(out.rgb.height).toBe(24);
-  });
-});
-
 describe("block-size invariance", () => {
   it("gives identical results for different tile sizes", () => {
     const model = Kongyo2xModel.fromJSON(vggLikeModel(1));
     const image = randomImage(3, 30, 30, 9);
-    const small = reconstructImage(model, image, { blockSize: 20 });
-    const large = reconstructImage(model, image, { blockSize: 40 });
+    const small = reconstructScale(model, 2, image, { blockSize: 20 });
+    const large = reconstructScale(model, 2, image, { blockSize: 40 });
     expect(maxAbsDiff(small, large)).toBeLessThan(1e-6);
   });
 });

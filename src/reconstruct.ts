@@ -79,29 +79,6 @@ function resolve(options: ReconstructOptions): { blockSize: number } {
   return { blockSize: options.blockSize ?? 128 };
 }
 
-export function reconstructImageY(model: Kongyo2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
-  const { blockSize } = resolve(options);
-  const offset = model.meta.offset;
-  const p = paddingParams(rgb.width, rgb.height, offset, 1, blockSize);
-  const padded = padEdge(rgb, p.padW1, p.padW2, p.padH1, p.padH2);
-  const yuv = rgb2yuv(padded);
-  const yPlane = getChannel(yuv, 0);
-  const refined = reconstructNN(model, yPlane, 1, offset, blockSize);
-  const yuvCrop = crop(yuv, p.padW1, p.padH1, p.padW1 + rgb.width, p.padH1 + rgb.height);
-  const yCrop = clamp01(crop(refined, 0, 0, rgb.width, rgb.height));
-  yuvCrop.data.set(yCrop.data, 0);
-  return clamp01(yuv2rgb(yuvCrop));
-}
-
-export function reconstructImageRgb(model: Kongyo2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
-  const { blockSize } = resolve(options);
-  const offset = model.meta.offset;
-  const p = paddingParams(rgb.width, rgb.height, offset, 1, blockSize);
-  const padded = padEdge(rgb, p.padW1, p.padW2, p.padH1, p.padH2);
-  const refined = reconstructNN(model, padded, 1, offset, blockSize);
-  return clamp01(crop(refined, 0, 0, rgb.width, rgb.height));
-}
-
 export function reconstructScaleY(
   model: Kongyo2xModel,
   scale: number,
@@ -156,10 +133,6 @@ export function reconstructScaleRgb(
   const padded = padEdge(processed, p.padW1, p.padW2, p.padH1, p.padH2);
   const refined = reconstructNN(model, padded, nnInnerScale, offset, blockSize);
   return clamp01(crop(refined, 0, 0, processed.width * nnInnerScale, processed.height * nnInnerScale));
-}
-
-export function reconstructImage(model: Kongyo2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
-  return model.isRgb ? reconstructImageRgb(model, rgb, options) : reconstructImageY(model, rgb, options);
 }
 
 export function reconstructScale(

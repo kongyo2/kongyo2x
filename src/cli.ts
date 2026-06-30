@@ -1,37 +1,35 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { basename, dirname, extname, join } from "node:path";
 import { loadImage, savePng } from "./image/io.js";
-import { loadModelFile, denoise, scaleImage, denoiseThenScale } from "./pipeline.js";
-import type { ProcessedImage, ScaleOptions } from "./pipeline.js";
+import { loadModelFile, scaleImage } from "./pipeline.js";
+import type { ScaleOptions } from "./pipeline.js";
 
-type Method = "noise" | "scale" | "noise_scale";
+const BUNDLED_MODEL_DIR = fileURLToPath(new URL("../models/mlpconv", import.meta.url));
 
 interface CliOptions {
   input: string;
   output: string;
-  method: Method;
-  noiseLevel: number;
   scale: number;
+  variant: string;
   modelDir: string;
   blockSize: number;
   alphaScale: "model" | "lanczos";
   quiet: boolean;
 }
 
-const HELP = `kongyo2x - image super-resolution and noise reduction powered by brain.js
+const HELP = `kongyo2x - image super-resolution powered by brain.js
 
 Usage:
   kongyo2x -i input.png [options]
 
 Options:
   -i, --input <path>        input image (PNG or JPEG)            [required]
-  -o, --output <path>       output PNG path (default: <name>_<method>.png)
-  -m, --method <method>     noise | scale | noise_scale          (default: noise_scale)
-  -n, --noise <level>       denoise level 0-3                    (default: 1)
+  -o, --output <path>       output PNG path (default: <name>_scale.png)
   -s, --scale <factor>      upscale factor                       (default: 2)
-  -d, --model-dir <path>    directory with *_model.json files    (default: ./models/mlpconv)
+      --variant <name>      model variant, e.g. hq               (default: none)
+  -d, --model-dir <path>    directory with *_model.json files    (default: bundled models)
       --block-size <n>      tile size for processing             (default: 128)
       --alpha-scale <mode>  model | lanczos (alpha upscaling)    (default: model)
   -q, --quiet               suppress progress output
@@ -44,10 +42,9 @@ function parse(argv: string[]): CliOptions {
     options: {
       input: { type: "string", short: "i" },
       output: { type: "string", short: "o" },
-      method: { type: "string", short: "m", default: "noise_scale" },
-      noise: { type: "string", short: "n", default: "1" },
       scale: { type: "string", short: "s", default: "2" },
-      "model-dir": { type: "string", short: "d", default: "./models/mlpconv" },
+      variant: { type: "string", default: "" },
+      "model-dir": { type: "string", short: "d", default: BUNDLED_MODEL_DIR },
       "block-size": { type: "string", default: "128" },
       "alpha-scale": { type: "string", default: "model" },
       quiet: { type: "boolean", short: "q", default: false },
@@ -61,21 +58,17 @@ function parse(argv: string[]): CliOptions {
     process.exit(values.help ? 0 : 1);
   }
 
-  const method = values.method as Method;
-  if (method !== "noise" && method !== "scale" && method !== "noise_scale") {
-    throw new Error(`invalid method: ${values.method} (expected noise|scale|noise_scale)`);
-  }
   const alphaScale = values["alpha-scale"] as "model" | "lanczos";
   if (alphaScale !== "model" && alphaScale !== "lanczos") {
     throw new Error(`invalid alpha-scale: ${values["alpha-scale"]} (expected model|lanczos)`);
   }
-  const noiseLevel = Number.parseInt(values.noise as string, 10);
-  if (!Number.isInteger(noiseLevel) || noiseLevel < 0 || noiseLevel > 3) {
-    throw new Error(`invalid noise level: ${values.noise} (expected 0-3)`);
-  }
   const scale = Number.parseInt(values.scale as string, 10);
   if (!Number.isInteger(scale) || scale < 1) {
     throw new Error(`invalid scale: ${values.scale}`);
+  }
+  const variant = values.variant as string;
+  if (variant !== "" && !/^[a-z0-9_-]+$/i.test(variant)) {
+    throw new Error(`invalid variant: ${variant} (expected letters, digits, '-' or '_')`);
   }
   const blockSize = Number.parseInt(values["block-size"] as string, 10);
   if (!Number.isInteger(blockSize) || blockSize < 16) {
@@ -83,13 +76,12 @@ function parse(argv: string[]): CliOptions {
   }
 
   const input = values.input;
-  const defaultOutput = join(dirname(input), `${basename(input, extname(input))}_${method}.png`);
+  const defaultOutput = join(dirname(input), `${basename(input, extname(input))}_scale.png`);
   return {
     input,
     output: values.output ?? defaultOutput,
-    method,
-    noiseLevel,
     scale,
+    variant,
     modelDir: values["model-dir"] as string,
     blockSize,
     alphaScale,
@@ -99,6 +91,11 @@ function parse(argv: string[]): CliOptions {
 
 function scaleTag(scale: number): string {
   return `${scale.toFixed(1)}x`;
+}
+
+function modelFileName(scale: number, variant: string): string {
+  const tag = scaleTag(scale);
+  return variant ? `scale${tag}_${variant}_model.json` : `scale${tag}_model.json`;
 }
 
 async function run(options: CliOptions): Promise<void> {
@@ -113,35 +110,10 @@ async function run(options: CliOptions): Promise<void> {
     }
   };
 
-  let result: ProcessedImage;
   const start = performance.now();
-
-  if (options.method === "noise") {
-    const model = await loadModelFile(join(options.modelDir, `noise${options.noiseLevel}_model.json`));
-    log(`denoise (level ${options.noiseLevel})`);
-    result = denoise(model, image, { blockSize: options.blockSize });
-  } else if (options.method === "scale") {
-    const model = await loadModelFile(join(options.modelDir, `scale${scaleTag(options.scale)}_model.json`));
-    log(`scale ${options.scale}x`);
-    result = scaleImage(model, options.scale, image, scaleOptions);
-  } else {
-    const combinedPath = join(
-      options.modelDir,
-      `noise${options.noiseLevel}_scale${scaleTag(options.scale)}_model.json`,
-    );
-    if (existsSync(combinedPath)) {
-      const model = await loadModelFile(combinedPath);
-      const scaleOnlyPath = join(options.modelDir, `scale${scaleTag(options.scale)}_model.json`);
-      const alphaModel = image.alpha && existsSync(scaleOnlyPath) ? await loadModelFile(scaleOnlyPath) : model;
-      log(`denoise+scale (combined model)`);
-      result = scaleImage(model, options.scale, image, scaleOptions, alphaModel);
-    } else {
-      const noiseModel = await loadModelFile(join(options.modelDir, `noise${options.noiseLevel}_model.json`));
-      const scaleModel = await loadModelFile(join(options.modelDir, `scale${scaleTag(options.scale)}_model.json`));
-      log(`denoise (level ${options.noiseLevel}) then scale ${options.scale}x`);
-      result = denoiseThenScale(noiseModel, scaleModel, options.scale, image, scaleOptions);
-    }
-  }
+  const model = await loadModelFile(join(options.modelDir, modelFileName(options.scale, options.variant)));
+  log(`scale ${options.scale}x${options.variant ? ` (${options.variant})` : ""}`);
+  const result = scaleImage(model, options.scale, image, scaleOptions);
 
   await savePng(options.output, result.rgb, result.alpha);
   const seconds = ((performance.now() - start) / 1000).toFixed(2);
