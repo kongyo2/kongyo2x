@@ -8,7 +8,7 @@ Image super-resolution in TypeScript. MLPconv networks, trained from scratch and
 npm install @kongyo2/kongyo2x
 ```
 
-Requires Node.js 20+. Installation pulls a transitive native module (`gl`, via brain.js's `gpu.js` peer dependency) that builds at install time to enable optional GPU acceleration. If that build fails — or you install with `--ignore-scripts` — kongyo2x falls back to brain.js on the CPU.
+Requires Node.js 20+. Installing also pulls a transitive native module — `gl` (headless-gl), via brain.js's `gpu.js` peer dependency — that builds at install time and can fail the whole install if its native build can't complete. Install with `--ignore-scripts` to skip that build; kongyo2x then runs on the CPU via brain.js and uses GPU acceleration only when `gl` is available.
 
 ## CLI
 
