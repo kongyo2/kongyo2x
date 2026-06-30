@@ -1,7 +1,7 @@
 {
   "name": "@kongyo2/kongyo2x",
   "version": "0.1.0",
-  "description": "Image super-resolution and noise reduction in TypeScript: MLPconv networks trained from scratch and run through brain.js.",
+  "description": "Image super-resolution in TypeScript: MLPconv networks trained from scratch and run through brain.js.",
   "type": "module",
   "license": "MIT",
   "author": "kongyo2",

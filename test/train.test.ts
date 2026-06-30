@@ -192,20 +192,20 @@ describe("exported model runs identically through the inference engine", () => {
 });
 
 describe("degrade", () => {
-  it("preserves channel count and dimensions for multi-channel noise input", () => {
+  it("preserves channel count and dimensions for multi-channel input", () => {
     const clean = randomTensor(3, 6, 8, 4);
-    const noisy = degrade(clean, { kind: "noise", noiseSigma: 0.05, scale: 1 }, createRng(1));
-    expect(noisy.channels).toBe(3);
-    expect(noisy.height).toBe(6);
-    expect(noisy.width).toBe(8);
-    expect(maxAbsDiff(noisy, clean)).toBeGreaterThan(0);
+    const low = degrade(clean, { scale: 2 });
+    expect(low.channels).toBe(3);
+    expect(low.height).toBe(6);
+    expect(low.width).toBe(8);
+    expect(maxAbsDiff(low, clean)).toBeGreaterThan(0);
   });
 });
 
 describe("end-to-end training", () => {
   it("improves over the untrained model and reduces the loss", () => {
     const config = defaultTrainConfig({
-      degradation: { kind: "noise", noiseSigma: 0.06, scale: 1 },
+      degradation: { scale: 2 },
       iterations: 120,
       batchSize: 4,
       patchSize: 32,

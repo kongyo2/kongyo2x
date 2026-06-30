@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { Tensor } from "../core/tensor.js";
-import { cloneTensor, createTensor } from "../core/tensor.js";
+import { createTensor } from "../core/tensor.js";
 import { crop } from "../image/pad.js";
 import { rgb2y } from "../image/color.js";
 import { resizeLanczos, resizeNearest } from "../image/resize.js";
@@ -9,15 +9,7 @@ import { decodeImage } from "../image/io.js";
 import type { Rng } from "./rng.js";
 
 export interface Degradation {
-  kind: "noise" | "scale";
-  noiseSigma: number;
   scale: number;
-}
-
-const NOISE_SIGMA = [0.01, 0.03, 0.06, 0.1];
-
-export function noiseSigmaForLevel(level: number): number {
-  return NOISE_SIGMA[Math.max(0, Math.min(NOISE_SIGMA.length - 1, level))] as number;
 }
 
 function clamp01InPlace(data: Float32Array): void {
@@ -92,27 +84,13 @@ export function generateLuma(size: number, rng: Rng): Tensor {
   return plane;
 }
 
-export function degrade(clean: Tensor, deg: Degradation, rng: Rng): Tensor {
-  let input: Tensor;
-  if (deg.kind === "scale") {
-    const low = resizeLanczos(
-      clean,
-      Math.max(1, Math.round(clean.width / deg.scale)),
-      Math.max(1, Math.round(clean.height / deg.scale)),
-    );
-    input = resizeNearest(low, clean.width, clean.height);
-  } else {
-    input = cloneTensor(clean);
-  }
-  if (deg.noiseSigma > 0) {
-    const sigma = deg.noiseSigma * (0.7 + 0.3 * rng.next());
-    const data = input.data;
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (data[i] as number) + rng.gaussian() * sigma;
-    }
-    clamp01InPlace(data);
-  }
-  return input;
+export function degrade(clean: Tensor, deg: Degradation): Tensor {
+  const low = resizeLanczos(
+    clean,
+    Math.max(1, Math.round(clean.width / deg.scale)),
+    Math.max(1, Math.round(clean.height / deg.scale)),
+  );
+  return resizeNearest(low, clean.width, clean.height);
 }
 
 export interface Dataset {

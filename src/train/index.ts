@@ -10,7 +10,7 @@ export { MlpconvNetwork, mlpconvSpecs } from "./network.js";
 export type { LayerSpec, Parameter, ForwardCache } from "./network.js";
 export { Adam, Ema, clipGradNorm, cosineLr, DEFAULT_ADAM } from "./optimizer.js";
 export type { AdamOptions, ScheduleOptions } from "./optimizer.js";
-export { SyntheticDataset, ImageDataset, generateLuma, degrade, noiseSigmaForLevel } from "./data.js";
+export { SyntheticDataset, ImageDataset, generateLuma, degrade } from "./data.js";
 export type { Dataset, Degradation } from "./data.js";
 export { trainModel, defaultTrainConfig } from "./trainer.js";
 export type { TrainConfig, TrainProgress, TrainResult } from "./trainer.js";
