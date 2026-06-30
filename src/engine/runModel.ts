@@ -3,10 +3,10 @@ import type { Kongyo2xModel } from "../model/model.js";
 import type { ModelLayer } from "../model/types.js";
 import { spatialFullConvolution } from "./deconv.js";
 import { brainConvForward } from "./brainConv.js";
-import { gpuConvForward, isGpuAvailable } from "./gpuConv.js";
+import { gpuConvForward, isGpuAvailable, disableGpu } from "./gpuConv.js";
 
 export function runModel(model: Kongyo2xModel, input: Tensor): Tensor {
-  const useGpu = isGpuAvailable();
+  let useGpu = isGpuAvailable();
   let current = input;
   for (let index = 0; index < model.layers.length; index++) {
     const layer = model.layers[index] as ModelLayer;
@@ -17,8 +17,13 @@ export function runModel(model: Kongyo2xModel, input: Tensor): Tensor {
     if (useGpu) {
       const params = model.convParams(index);
       if (params) {
-        current = gpuConvForward(current, layer, params.weights, params.bias, params.alpha);
-        continue;
+        try {
+          current = gpuConvForward(current, layer, params.weights, params.bias, params.alpha);
+          continue;
+        } catch {
+          disableGpu();
+          useGpu = false;
+        }
       }
     }
     const net = model.convNetwork(index);

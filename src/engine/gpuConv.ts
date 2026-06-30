@@ -149,6 +149,15 @@ export function isGpuAvailable(): boolean {
   return available;
 }
 
+export function disableGpu(): void {
+  available = false;
+  kernels.clear();
+  if (gpu) {
+    destroyGpu(gpu);
+    gpu = undefined;
+  }
+}
+
 function getGpu(): GpuInstance {
   if (!gpu) {
     gpu = createGpu();
