@@ -31,7 +31,7 @@ Options:
   -m, --method <method>     noise | scale | noise_scale          (default: noise_scale)
   -n, --noise <level>       denoise level 0-3                    (default: 1)
   -s, --scale <factor>      upscale factor                       (default: 2)
-  -d, --model-dir <path>    directory with *_model.json files    (default: ./models/vgg_7/art)
+  -d, --model-dir <path>    directory with *_model.json files    (default: ./models/mlpconv)
       --block-size <n>      tile size for processing             (default: 128)
       --alpha-scale <mode>  model | lanczos (alpha upscaling)    (default: model)
   -q, --quiet               suppress progress output
@@ -47,7 +47,7 @@ function parse(argv: string[]): CliOptions {
       method: { type: "string", short: "m", default: "noise_scale" },
       noise: { type: "string", short: "n", default: "1" },
       scale: { type: "string", short: "s", default: "2" },
-      "model-dir": { type: "string", short: "d", default: "./models/vgg_7/art" },
+      "model-dir": { type: "string", short: "d", default: "./models/mlpconv" },
       "block-size": { type: "string", default: "128" },
       "alpha-scale": { type: "string", default: "model" },
       quiet: { type: "boolean", short: "q", default: false },

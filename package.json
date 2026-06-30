@@ -1,7 +1,7 @@
 {
   "name": "kongyo2x",
   "version": "0.1.0",
-  "description": "Image super-resolution and noise reduction in TypeScript, running its convolutional networks through brain.js.",
+  "description": "Image super-resolution and noise reduction in TypeScript: MLPconv networks trained from scratch and run through brain.js.",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -32,7 +32,7 @@
     "lint:strict": "oxlint --deny-warnings",
     "test": "vitest run",
     "cli": "tsx src/cli.ts",
-    "convert-models": "tsx scripts/convert-models.ts"
+    "train": "tsx scripts/train.ts"
   },
   "dependencies": {
     "brain.js": "2.0.0-beta.24",

@@ -37,3 +37,31 @@ export type { LoadedImage } from "./image/io.js";
 export { rgb2yuv, yuv2rgb, rgb2y } from "./image/color.js";
 export { resizeLanczos, resizeNearest } from "./image/resize.js";
 export { makeBorder } from "./image/alpha.js";
+export {
+  MlpconvNetwork,
+  mlpconvSpecs,
+  trainModel,
+  defaultTrainConfig,
+  SyntheticDataset,
+  ImageDataset,
+  generateLuma,
+  degrade,
+  noiseSigmaForLevel,
+  Adam,
+  Ema,
+  clipGradNorm,
+  cosineLr,
+  computeLoss,
+  psnr,
+  createRng,
+} from "./train/index.js";
+export type {
+  TrainConfig,
+  TrainProgress,
+  TrainResult,
+  Dataset,
+  Degradation,
+  LayerSpec,
+  LossKind,
+  Rng,
+} from "./train/index.js";
