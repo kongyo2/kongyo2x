@@ -66,6 +66,12 @@ function deconvToJSON(layer: DeconvLayer): DeconvLayerJSON {
   };
 }
 
+export interface ConvParams {
+  weights: Float32Array;
+  bias: Float32Array;
+  alpha: number;
+}
+
 export class Kongyo2xModel {
   readonly meta: ModelMeta;
   readonly layers: ModelLayer[];
@@ -136,6 +142,39 @@ export class Kongyo2xModel {
 
   convNetwork(index: number): BrainNeuralNetwork | undefined {
     return this.convNets[index];
+  }
+
+  convParams(index: number): ConvParams | undefined {
+    const net = this.convNets[index];
+    if (!net) {
+      return undefined;
+    }
+    const network = net.toJSON();
+    if (network.options.activation !== "leaky-relu" || network.trainOpts.activation !== "leaky-relu") {
+      return undefined;
+    }
+    if (network.layers.length !== 2) {
+      return undefined;
+    }
+    const dense = network.layers[1];
+    if (!dense) {
+      return undefined;
+    }
+    const rows = dense.weights;
+    const outputPlanes = rows.length;
+    const inputSize = outputPlanes > 0 ? (rows[0]?.length ?? 0) : 0;
+    const weights = new Float32Array(outputPlanes * inputSize);
+    for (let o = 0; o < outputPlanes; o++) {
+      const row = rows[o] ?? [];
+      for (let k = 0; k < inputSize; k++) {
+        weights[o * inputSize + k] = row[k] ?? 0;
+      }
+    }
+    return {
+      weights,
+      bias: Float32Array.from(dense.biases),
+      alpha: network.trainOpts.leakyReluAlpha,
+    };
   }
 
   get isRgb(): boolean {

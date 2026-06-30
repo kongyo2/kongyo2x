@@ -5,6 +5,7 @@ import { basename, dirname, extname, join } from "node:path";
 import { loadImage, savePng } from "./image/io.js";
 import { loadModelFile, scaleImage } from "./pipeline.js";
 import type { ScaleOptions } from "./pipeline.js";
+import { isGpuAvailable } from "./engine/gpuConv.js";
 
 const BUNDLED_MODEL_DIR = fileURLToPath(new URL("../models/mlpconv", import.meta.url));
 
@@ -112,7 +113,9 @@ async function run(options: CliOptions): Promise<void> {
 
   const start = performance.now();
   const model = await loadModelFile(join(options.modelDir, modelFileName(options.scale, options.variant)));
-  log(`scale ${options.scale}x${options.variant ? ` (${options.variant})` : ""}`);
+  log(
+    `scale ${options.scale}x${options.variant ? ` (${options.variant})` : ""} · engine: ${isGpuAvailable() ? "gpu" : "cpu"}`,
+  );
   const result = scaleImage(model, options.scale, image, scaleOptions);
 
   await savePng(options.output, result.rgb, result.alpha);

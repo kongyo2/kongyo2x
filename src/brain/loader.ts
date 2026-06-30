@@ -35,6 +35,8 @@ interface NodeModuleInternals {
   _load(request: string, parent: unknown, isMain: boolean): unknown;
 }
 
+const require = createRequire(import.meta.url);
+
 function installGlStub(): void {
   const internals = Module as unknown as NodeModuleInternals;
   const original = internals._load.bind(internals);
@@ -54,8 +56,11 @@ export function loadBrain(): BrainModule {
   if (cached) {
     return cached;
   }
-  installGlStub();
-  const require = createRequire(import.meta.url);
-  cached = require("brain.js") as BrainModule;
+  try {
+    cached = require("brain.js") as BrainModule;
+  } catch {
+    installGlStub();
+    cached = require("brain.js") as BrainModule;
+  }
   return cached;
 }
