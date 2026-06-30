@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { basename, dirname, extname, join } from "node:path";
 import { loadImage, savePng } from "./image/io.js";
 import { loadModelFile, denoise, scaleImage, denoiseThenScale } from "./pipeline.js";
 import type { ProcessedImage, ScaleOptions } from "./pipeline.js";
 
 type Method = "noise" | "scale" | "noise_scale";
+
+const BUNDLED_MODEL_DIR = fileURLToPath(new URL("../models/mlpconv", import.meta.url));
 
 interface CliOptions {
   input: string;
@@ -31,7 +34,7 @@ Options:
   -m, --method <method>     noise | scale | noise_scale          (default: noise_scale)
   -n, --noise <level>       denoise level 0-3                    (default: 1)
   -s, --scale <factor>      upscale factor                       (default: 2)
-  -d, --model-dir <path>    directory with *_model.json files    (default: ./models/mlpconv)
+  -d, --model-dir <path>    directory with *_model.json files    (default: bundled models)
       --block-size <n>      tile size for processing             (default: 128)
       --alpha-scale <mode>  model | lanczos (alpha upscaling)    (default: model)
   -q, --quiet               suppress progress output
@@ -47,7 +50,7 @@ function parse(argv: string[]): CliOptions {
       method: { type: "string", short: "m", default: "noise_scale" },
       noise: { type: "string", short: "n", default: "1" },
       scale: { type: "string", short: "s", default: "2" },
-      "model-dir": { type: "string", short: "d", default: "./models/mlpconv" },
+      "model-dir": { type: "string", short: "d", default: BUNDLED_MODEL_DIR },
       "block-size": { type: "string", default: "128" },
       "alpha-scale": { type: "string", default: "model" },
       quiet: { type: "boolean", short: "q", default: false },

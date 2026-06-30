@@ -5,5 +5,6 @@ coverage
 .DS_Store
 /models/**/*.json
 !/models/.gitkeep
+!/models/mlpconv/scale2.0x_model.json
 /tmp-out
 *.local

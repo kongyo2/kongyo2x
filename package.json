@@ -1,12 +1,34 @@
 {
-  "name": "kongyo2x",
+  "name": "@kongyo2/kongyo2x",
   "version": "0.1.0",
   "description": "Image super-resolution and noise reduction in TypeScript: MLPconv networks trained from scratch and run through brain.js.",
   "type": "module",
   "license": "MIT",
-  "bin": {
-    "kongyo2x": "./dist/cli.js"
+  "author": "kongyo2",
+  "homepage": "https://github.com/kongyo2/kongyo2x#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kongyo2/kongyo2x.git"
   },
+  "bugs": {
+    "url": "https://github.com/kongyo2/kongyo2x/issues"
+  },
+  "keywords": [
+    "super-resolution",
+    "upscale",
+    "image",
+    "waifu2x",
+    "denoise",
+    "brain.js",
+    "mlpconv",
+    "neural-network",
+    "typescript"
+  ],
+  "bin": {
+    "kongyo2x": "dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -15,14 +37,18 @@
   },
   "files": [
     "dist",
-    "LICENSE",
-    "NOTICE"
+    "models",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
     "format": "prettier --write .",
