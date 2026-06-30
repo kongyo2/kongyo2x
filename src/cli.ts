@@ -12,6 +12,7 @@ interface CliOptions {
   input: string;
   output: string;
   scale: number;
+  variant: string;
   modelDir: string;
   blockSize: number;
   alphaScale: "model" | "lanczos";
@@ -27,6 +28,7 @@ Options:
   -i, --input <path>        input image (PNG or JPEG)            [required]
   -o, --output <path>       output PNG path (default: <name>_scale.png)
   -s, --scale <factor>      upscale factor                       (default: 2)
+      --variant <name>      model variant, e.g. hq               (default: none)
   -d, --model-dir <path>    directory with *_model.json files    (default: bundled models)
       --block-size <n>      tile size for processing             (default: 128)
       --alpha-scale <mode>  model | lanczos (alpha upscaling)    (default: model)
@@ -41,6 +43,7 @@ function parse(argv: string[]): CliOptions {
       input: { type: "string", short: "i" },
       output: { type: "string", short: "o" },
       scale: { type: "string", short: "s", default: "2" },
+      variant: { type: "string", default: "" },
       "model-dir": { type: "string", short: "d", default: BUNDLED_MODEL_DIR },
       "block-size": { type: "string", default: "128" },
       "alpha-scale": { type: "string", default: "model" },
@@ -63,6 +66,10 @@ function parse(argv: string[]): CliOptions {
   if (!Number.isInteger(scale) || scale < 1) {
     throw new Error(`invalid scale: ${values.scale}`);
   }
+  const variant = values.variant as string;
+  if (variant !== "" && !/^[a-z0-9_-]+$/i.test(variant)) {
+    throw new Error(`invalid variant: ${variant} (expected letters, digits, '-' or '_')`);
+  }
   const blockSize = Number.parseInt(values["block-size"] as string, 10);
   if (!Number.isInteger(blockSize) || blockSize < 16) {
     throw new Error(`invalid block size: ${values["block-size"]}`);
@@ -74,6 +81,7 @@ function parse(argv: string[]): CliOptions {
     input,
     output: values.output ?? defaultOutput,
     scale,
+    variant,
     modelDir: values["model-dir"] as string,
     blockSize,
     alphaScale,
@@ -83,6 +91,11 @@ function parse(argv: string[]): CliOptions {
 
 function scaleTag(scale: number): string {
   return `${scale.toFixed(1)}x`;
+}
+
+function modelFileName(scale: number, variant: string): string {
+  const tag = scaleTag(scale);
+  return variant ? `scale${tag}_${variant}_model.json` : `scale${tag}_model.json`;
 }
 
 async function run(options: CliOptions): Promise<void> {
@@ -98,8 +111,8 @@ async function run(options: CliOptions): Promise<void> {
   };
 
   const start = performance.now();
-  const model = await loadModelFile(join(options.modelDir, `scale${scaleTag(options.scale)}_model.json`));
-  log(`scale ${options.scale}x`);
+  const model = await loadModelFile(join(options.modelDir, modelFileName(options.scale, options.variant)));
+  log(`scale ${options.scale}x${options.variant ? ` (${options.variant})` : ""}`);
   const result = scaleImage(model, options.scale, image, scaleOptions);
 
   await savePng(options.output, result.rgb, result.alpha);
