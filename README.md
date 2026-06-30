@@ -1,6 +1,6 @@
 # kongyo2x
 
-Image super-resolution in TypeScript. MLPconv networks, trained from scratch and run through [brain.js](https://brain.js.org/), upscale and denoise images — no Python, no native runtime required.
+Image super-resolution in TypeScript. MLPconv networks, trained from scratch and run through [brain.js](https://brain.js.org/), upscale and denoise images — pure TypeScript, no Python.
 
 ## Install
 
@@ -8,7 +8,7 @@ Image super-resolution in TypeScript. MLPconv networks, trained from scratch and
 npm install @kongyo2/kongyo2x
 ```
 
-Requires Node.js 20+.
+Requires Node.js 20+. Installation pulls a transitive native module (`gl`, via brain.js's `gpu.js` peer dependency) that builds at install time to enable optional GPU acceleration. If that build fails — or you install with `--ignore-scripts` — kongyo2x falls back to brain.js on the CPU.
 
 ## CLI
 
@@ -26,7 +26,7 @@ npx kongyo2x -i input.png -o output.png
 | `--alpha-scale <mode>` | `model` or `lanczos` | `model` |
 | `-q, --quiet` | suppress progress output | |
 
-Two models ship with the package: the default `scale2.0x` and a higher-quality `scale2.0x_hq` (`--variant hq`). When the optional `headless-gl` native module is present, convolutions run on the GPU; otherwise they fall back to brain.js on the CPU.
+Two models ship with the package: the default `scale2.0x` and a higher-quality `scale2.0x_hq` (`--variant hq`).
 
 ## Library
 
@@ -41,9 +41,11 @@ await savePng("output.png", result.rgb, result.alpha);
 
 ## Training
 
-Train a model from scratch on your own images (or synthetic data if `--data` is omitted):
+Training runs from a source checkout — `scripts/train.ts` is not part of the published npm package. Clone the repo, then train a model from scratch on your own images (or synthetic data if `--data` is omitted):
 
 ```sh
+git clone https://github.com/kongyo2/kongyo2x
+cd kongyo2x && npm install
 npm run train -- --data ./images --scale 2 -o models/mlpconv/scale2.0x_model.json
 ```
 
