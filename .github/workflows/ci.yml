@@ -1,8 +1,9 @@
 name: CI
 
 # `npm ci --ignore-scripts` skips the headless-gl native build, which needs X11
-# system libraries that CI runners lack. kongyo2x stubs gl and runs brain.js on
-# the CPU only (see src/brain/loader.ts), so the compiled binary is never used.
+# system libraries that CI runners lack. kongyo2x runs on the GPU when headless-gl
+# is available and otherwise falls back to brain.js on the CPU (see
+# src/brain/loader.ts), so CI exercises the CPU path here.
 
 on:
   push:

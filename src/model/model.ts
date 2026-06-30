@@ -66,11 +66,18 @@ function deconvToJSON(layer: DeconvLayer): DeconvLayerJSON {
   };
 }
 
+export interface ConvParams {
+  weights: Float32Array;
+  bias: Float32Array;
+  alpha: number;
+}
+
 export class Kongyo2xModel {
   readonly meta: ModelMeta;
   readonly layers: ModelLayer[];
   private readonly convNets: Array<BrainNeuralNetwork | undefined>;
   private readonly convJSON: Array<ConvLayerJSON | undefined>;
+  private readonly convParamsCache: Array<ConvParams | undefined>;
 
   private constructor(
     meta: ModelMeta,
@@ -82,6 +89,7 @@ export class Kongyo2xModel {
     this.layers = layers;
     this.convNets = convNets;
     this.convJSON = convJSON;
+    this.convParamsCache = new Array<ConvParams | undefined>(layers.length).fill(undefined);
   }
 
   static fromJSON(json: Kongyo2xModelJSON): Kongyo2xModel {
@@ -136,6 +144,38 @@ export class Kongyo2xModel {
 
   convNetwork(index: number): BrainNeuralNetwork | undefined {
     return this.convNets[index];
+  }
+
+  convParams(index: number): ConvParams | undefined {
+    const cached = this.convParamsCache[index];
+    if (cached) {
+      return cached;
+    }
+    const layer = this.convJSON[index];
+    if (!layer) {
+      return undefined;
+    }
+    const dense = layer.network.layers[1];
+    if (!dense) {
+      return undefined;
+    }
+    const rows = dense.weights;
+    const outputPlanes = rows.length;
+    const inputSize = outputPlanes > 0 ? (rows[0]?.length ?? 0) : 0;
+    const weights = new Float32Array(outputPlanes * inputSize);
+    for (let o = 0; o < outputPlanes; o++) {
+      const row = rows[o] ?? [];
+      for (let k = 0; k < inputSize; k++) {
+        weights[o * inputSize + k] = row[k] ?? 0;
+      }
+    }
+    const params: ConvParams = {
+      weights,
+      bias: Float32Array.from(dense.biases),
+      alpha: layer.network.trainOpts.leakyReluAlpha,
+    };
+    this.convParamsCache[index] = params;
+    return params;
   }
 
   get isRgb(): boolean {

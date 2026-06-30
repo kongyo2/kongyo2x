@@ -35,6 +35,10 @@ interface NodeModuleInternals {
   _load(request: string, parent: unknown, isMain: boolean): unknown;
 }
 
+type CreateContext = (width: number, height: number, options: Record<string, unknown>) => unknown;
+
+const require = createRequire(import.meta.url);
+
 function installGlStub(): void {
   const internals = Module as unknown as NodeModuleInternals;
   const original = internals._load.bind(internals);
@@ -48,14 +52,41 @@ function installGlStub(): void {
   };
 }
 
+function probeGpu(): boolean {
+  if (process.env.KONGYO2X_DISABLE_GPU === "1" || process.env.KONGYO2X_GPU === "0") {
+    return false;
+  }
+  try {
+    const createContext = require("gl") as CreateContext;
+    const context = createContext(1, 1, {}) as { getExtension(name: string): { destroy(): void } | null } | null;
+    if (!context) {
+      return false;
+    }
+    context.getExtension("STACKGL_destroy_context")?.destroy();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let gpuAvailable: boolean | undefined;
+
+export function isGpuAvailable(): boolean {
+  if (gpuAvailable === undefined) {
+    gpuAvailable = probeGpu();
+  }
+  return gpuAvailable;
+}
+
 let cached: BrainModule | undefined;
 
 export function loadBrain(): BrainModule {
   if (cached) {
     return cached;
   }
-  installGlStub();
-  const require = createRequire(import.meta.url);
+  if (!isGpuAvailable()) {
+    installGlStub();
+  }
   cached = require("brain.js") as BrainModule;
   return cached;
 }
