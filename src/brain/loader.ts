@@ -52,13 +52,29 @@ function installGlStub(): void {
 
 let cached: BrainModule | undefined;
 
+function brainInstalled(): boolean {
+  try {
+    require.resolve("brain.js");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function loadBrain(): BrainModule {
   if (cached) {
     return cached;
   }
   try {
     cached = require("brain.js") as BrainModule;
-  } catch {
+  } catch (error) {
+    // brain.js loads gl eagerly; the stub lets it run on the CPU when the gl
+    // native build is missing. When brain.js itself is absent the retry can't
+    // succeed, so skip the stub rather than shadow `gl` process-wide for code
+    // that has nothing to do with kongyo2x.
+    if (!brainInstalled()) {
+      throw error;
+    }
     installGlStub();
     cached = require("brain.js") as BrainModule;
   }

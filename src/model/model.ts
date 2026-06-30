@@ -1,5 +1,5 @@
 import { buildNetwork } from "../brain/network.js";
-import type { BrainNeuralNetwork } from "../brain/network.js";
+import type { BrainNetworkJSON, BrainNeuralNetwork } from "../brain/network.js";
 import type {
   ConvLayer,
   ConvLayerJSON,
@@ -10,6 +10,14 @@ import type {
   ModelLayerJSON,
   ModelMeta,
 } from "./types.js";
+
+function tryBuildNetwork(json: BrainNetworkJSON): BrainNeuralNetwork | undefined {
+  try {
+    return buildNetwork(json);
+  } catch {
+    return undefined;
+  }
+}
 
 function convFromJSON(layer: ConvLayerJSON): ConvLayer {
   const sizes = layer.network.sizes;
@@ -107,7 +115,7 @@ export class Kongyo2xModel {
         convJSON.push(undefined);
       } else {
         layers.push(convFromJSON(layer));
-        convNets.push(buildNetwork(layer.network));
+        convNets.push(tryBuildNetwork(layer.network));
         convJSON.push(layer);
       }
     }
@@ -145,11 +153,11 @@ export class Kongyo2xModel {
   }
 
   convParams(index: number): ConvParams | undefined {
-    const net = this.convNets[index];
-    if (!net) {
+    const stored = this.convJSON[index];
+    if (!stored) {
       return undefined;
     }
-    const network = net.toJSON();
+    const network = this.convNets[index]?.toJSON() ?? stored.network;
     if (network.options.activation !== "leaky-relu" || network.trainOpts.activation !== "leaky-relu") {
       return undefined;
     }
