@@ -5,7 +5,6 @@ import { basename, dirname, extname, join } from "node:path";
 import { loadImage, savePng } from "./image/io.js";
 import { loadModelFile, denoise, scaleImage, denoiseThenScale } from "./pipeline.js";
 import type { ProcessedImage, ScaleOptions } from "./pipeline.js";
-import type { Engine } from "./engine/runModel.js";
 
 type Method = "noise" | "scale" | "noise_scale";
 
@@ -16,16 +15,15 @@ interface CliOptions {
   noiseLevel: number;
   scale: number;
   modelDir: string;
-  engine: Engine;
   blockSize: number;
   alphaScale: "model" | "lanczos";
   quiet: boolean;
 }
 
-const HELP = `waifu2x-brainjs - image super-resolution and noise reduction (waifu2x port via brain.js)
+const HELP = `kongyo2x - image super-resolution and noise reduction powered by brain.js
 
 Usage:
-  waifu2x-brainjs -i input.png [options]
+  kongyo2x -i input.png [options]
 
 Options:
   -i, --input <path>        input image (PNG or JPEG)            [required]
@@ -34,7 +32,6 @@ Options:
   -n, --noise <level>       denoise level 0-3                    (default: 1)
   -s, --scale <factor>      upscale factor                       (default: 2)
   -d, --model-dir <path>    directory with *_model.json files    (default: ./models/vgg_7/art)
-      --engine <engine>     fast | brain                         (default: fast)
       --block-size <n>      tile size for processing             (default: 128)
       --alpha-scale <mode>  model | lanczos (alpha upscaling)    (default: model)
   -q, --quiet               suppress progress output
@@ -51,7 +48,6 @@ function parse(argv: string[]): CliOptions {
       noise: { type: "string", short: "n", default: "1" },
       scale: { type: "string", short: "s", default: "2" },
       "model-dir": { type: "string", short: "d", default: "./models/vgg_7/art" },
-      engine: { type: "string", default: "fast" },
       "block-size": { type: "string", default: "128" },
       "alpha-scale": { type: "string", default: "model" },
       quiet: { type: "boolean", short: "q", default: false },
@@ -68,10 +64,6 @@ function parse(argv: string[]): CliOptions {
   const method = values.method as Method;
   if (method !== "noise" && method !== "scale" && method !== "noise_scale") {
     throw new Error(`invalid method: ${values.method} (expected noise|scale|noise_scale)`);
-  }
-  const engine = values.engine as Engine;
-  if (engine !== "fast" && engine !== "brain") {
-    throw new Error(`invalid engine: ${values.engine} (expected fast|brain)`);
   }
   const alphaScale = values["alpha-scale"] as "model" | "lanczos";
   if (alphaScale !== "model" && alphaScale !== "lanczos") {
@@ -99,7 +91,6 @@ function parse(argv: string[]): CliOptions {
     noiseLevel,
     scale,
     modelDir: values["model-dir"] as string,
-    engine,
     blockSize,
     alphaScale,
     quiet: values.quiet ?? false,
@@ -113,7 +104,6 @@ function scaleTag(scale: number): string {
 async function run(options: CliOptions): Promise<void> {
   const image = await loadImage(options.input);
   const scaleOptions: ScaleOptions = {
-    engine: options.engine,
     blockSize: options.blockSize,
     alphaScale: options.alphaScale,
   };
@@ -128,11 +118,11 @@ async function run(options: CliOptions): Promise<void> {
 
   if (options.method === "noise") {
     const model = await loadModelFile(join(options.modelDir, `noise${options.noiseLevel}_model.json`));
-    log(`denoise (level ${options.noiseLevel}) with ${options.engine} engine`);
-    result = denoise(model, image, { engine: options.engine, blockSize: options.blockSize });
+    log(`denoise (level ${options.noiseLevel})`);
+    result = denoise(model, image, { blockSize: options.blockSize });
   } else if (options.method === "scale") {
     const model = await loadModelFile(join(options.modelDir, `scale${scaleTag(options.scale)}_model.json`));
-    log(`scale ${options.scale}x with ${options.engine} engine`);
+    log(`scale ${options.scale}x`);
     result = scaleImage(model, options.scale, image, scaleOptions);
   } else {
     const combinedPath = join(
@@ -143,12 +133,12 @@ async function run(options: CliOptions): Promise<void> {
       const model = await loadModelFile(combinedPath);
       const scaleOnlyPath = join(options.modelDir, `scale${scaleTag(options.scale)}_model.json`);
       const alphaModel = image.alpha && existsSync(scaleOnlyPath) ? await loadModelFile(scaleOnlyPath) : model;
-      log(`denoise+scale (combined model) with ${options.engine} engine`);
+      log(`denoise+scale (combined model)`);
       result = scaleImage(model, options.scale, image, scaleOptions, alphaModel);
     } else {
       const noiseModel = await loadModelFile(join(options.modelDir, `noise${options.noiseLevel}_model.json`));
       const scaleModel = await loadModelFile(join(options.modelDir, `scale${scaleTag(options.scale)}_model.json`));
-      log(`denoise (level ${options.noiseLevel}) then scale ${options.scale}x with ${options.engine} engine`);
+      log(`denoise (level ${options.noiseLevel}) then scale ${options.scale}x`);
       result = denoiseThenScale(noiseModel, scaleModel, options.scale, image, scaleOptions);
     }
   }

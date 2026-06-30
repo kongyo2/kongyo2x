@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { Waifu2xModel } from "./model/model.js";
-import type { RawModelJSON } from "./model/types.js";
+import { Kongyo2xModel } from "./model/model.js";
+import type { Kongyo2xModelJSON } from "./model/types.js";
 import type { Tensor } from "./core/tensor.js";
 import { stackChannels } from "./core/tensor.js";
 import { reconstructImage, reconstructScale } from "./reconstruct.js";
@@ -25,22 +25,22 @@ export interface ScaleOptions extends ReconstructOptions {
   alphaScale?: AlphaScaleMode;
 }
 
-export function loadModelFromJson(raw: RawModelJSON): Waifu2xModel {
-  return Waifu2xModel.fromJSON(raw);
+export function loadModelFromJson(json: Kongyo2xModelJSON): Kongyo2xModel {
+  return Kongyo2xModel.fromJSON(json);
 }
 
-export async function loadModelFile(path: string): Promise<Waifu2xModel> {
+export async function loadModelFile(path: string): Promise<Kongyo2xModel> {
   const text = await readFile(path, "utf8");
-  return Waifu2xModel.fromJSON(JSON.parse(text) as RawModelJSON);
+  return Kongyo2xModel.fromJSON(JSON.parse(text) as Kongyo2xModelJSON);
 }
 
-export function denoise(model: Waifu2xModel, input: ImageInput, options: ReconstructOptions = {}): ProcessedImage {
+export function denoise(model: Kongyo2xModel, input: ImageInput, options: ReconstructOptions = {}): ProcessedImage {
   const rgb = reconstructImage(model, input.rgb, options);
   return input.alpha ? { rgb, alpha: input.alpha } : { rgb };
 }
 
 function upscaleAlpha(
-  scaleModel: Waifu2xModel,
+  scaleModel: Kongyo2xModel,
   scale: number,
   alpha: Tensor,
   mode: AlphaScaleMode,
@@ -56,20 +56,18 @@ function upscaleAlpha(
   return rgb2y(scaled);
 }
 
+function reconstructOptionsOf(options: ScaleOptions): ReconstructOptions {
+  return options.blockSize !== undefined ? { blockSize: options.blockSize } : {};
+}
+
 export function scaleImage(
-  model: Waifu2xModel,
+  model: Kongyo2xModel,
   scale: number,
   input: ImageInput,
   options: ScaleOptions = {},
-  alphaModel: Waifu2xModel = model,
+  alphaModel: Kongyo2xModel = model,
 ): ProcessedImage {
-  const reconstructOptions: ReconstructOptions = {};
-  if (options.blockSize !== undefined) {
-    reconstructOptions.blockSize = options.blockSize;
-  }
-  if (options.engine !== undefined) {
-    reconstructOptions.engine = options.engine;
-  }
+  const reconstructOptions = reconstructOptionsOf(options);
   const bordered = input.alpha ? makeBorder(input.rgb, input.alpha, alphaModel.meta.offset) : input.rgb;
   const rgb = reconstructScale(model, scale, bordered, reconstructOptions);
   if (!input.alpha) {
@@ -80,19 +78,13 @@ export function scaleImage(
 }
 
 export function denoiseThenScale(
-  noiseModel: Waifu2xModel,
-  scaleModel: Waifu2xModel,
+  noiseModel: Kongyo2xModel,
+  scaleModel: Kongyo2xModel,
   scale: number,
   input: ImageInput,
   options: ScaleOptions = {},
 ): ProcessedImage {
-  const reconstructOptions: ReconstructOptions = {};
-  if (options.blockSize !== undefined) {
-    reconstructOptions.blockSize = options.blockSize;
-  }
-  if (options.engine !== undefined) {
-    reconstructOptions.engine = options.engine;
-  }
+  const reconstructOptions = reconstructOptionsOf(options);
   const bordered = input.alpha ? makeBorder(input.rgb, input.alpha, scaleModel.meta.offset) : input.rgb;
   const denoised = reconstructImage(noiseModel, bordered, reconstructOptions);
   const rgb = reconstructScale(scaleModel, scale, denoised, reconstructOptions);
@@ -104,11 +96,11 @@ export function denoiseThenScale(
 }
 
 export function noiseScaleCombined(
-  noiseScaleModel: Waifu2xModel,
+  noiseScaleModel: Kongyo2xModel,
   scale: number,
   input: ImageInput,
   options: ScaleOptions = {},
-  scaleModel: Waifu2xModel = noiseScaleModel,
+  scaleModel: Kongyo2xModel = noiseScaleModel,
 ): ProcessedImage {
   return scaleImage(noiseScaleModel, scale, input, options, scaleModel);
 }

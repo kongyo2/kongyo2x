@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTensor } from "../src/core/tensor.js";
-import { spatialConvolutionMM } from "../src/engine/conv.js";
+import { brainConvForward } from "../src/engine/brainConv.js";
+import { buildNetwork, convNetworkJSON, IDENTITY_ALPHA } from "../src/brain/network.js";
 import { spatialFullConvolution, deconvOutputSize } from "../src/engine/deconv.js";
 import { rgb2yuv, yuv2rgb } from "../src/image/color.js";
 import { resizeNearest } from "../src/image/resize.js";
@@ -8,8 +9,8 @@ import { padEdge, crop } from "../src/image/pad.js";
 import type { ConvLayer, DeconvLayer } from "../src/model/types.js";
 import { randomImage, maxAbsDiff } from "./helpers.js";
 
-describe("conv", () => {
-  it("matches a hand-computed 1x1->1 valid convolution", () => {
+describe("brain conv", () => {
+  it("matches a hand-computed 3x3 valid convolution", () => {
     const input = createTensor(1, 3, 3);
     input.data.set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     const layer: ConvLayer = {
@@ -22,13 +23,12 @@ describe("conv", () => {
       strideY: 1,
       padX: 0,
       padY: 0,
-      weights: Float32Array.from([0, 0, 0, 0, 1, 0, 0, 0, 0]),
-      bias: Float32Array.from([10]),
     };
-    const out = spatialConvolutionMM(input, layer);
+    const net = buildNetwork(convNetworkJSON([[0, 0, 0, 0, 1, 0, 0, 0, 0]], [10], IDENTITY_ALPHA));
+    const out = brainConvForward(input, layer, net);
     expect(out.width).toBe(1);
     expect(out.height).toBe(1);
-    expect(out.data[0]).toBeCloseTo(15, 6);
+    expect(out.data[0]).toBeCloseTo(15, 5);
   });
 
   it("sums two input planes", () => {
@@ -44,11 +44,10 @@ describe("conv", () => {
       strideY: 1,
       padX: 0,
       padY: 0,
-      weights: Float32Array.from([2, 5]),
-      bias: Float32Array.from([1]),
     };
-    const out = spatialConvolutionMM(input, layer);
-    expect(out.data[0]).toBeCloseTo(2 * 3 + 5 * 4 + 1, 6);
+    const net = buildNetwork(convNetworkJSON([[2, 5]], [1], IDENTITY_ALPHA));
+    const out = brainConvForward(input, layer, net);
+    expect(out.data[0]).toBeCloseTo(2 * 3 + 5 * 4 + 1, 5);
   });
 });
 

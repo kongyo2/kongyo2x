@@ -1,7 +1,7 @@
 import { createTensor } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
 import type { ConvLayer } from "../model/types.js";
-import type { BrainNeuralNetwork } from "../brain/loader.js";
+import type { BrainNeuralNetwork } from "../brain/network.js";
 import { convOutputSize } from "./conv.js";
 
 export function brainConvForward(input: Tensor, layer: ConvLayer, net: BrainNeuralNetwork): Tensor {

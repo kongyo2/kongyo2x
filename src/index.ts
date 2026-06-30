@@ -1,9 +1,19 @@
-export { Waifu2xModel } from "./model/model.js";
-export type { ConvLayer, DeconvLayer, ModelLayer, ModelMeta, RawLayerJSON, RawModelJSON } from "./model/types.js";
+export { Kongyo2xModel } from "./model/model.js";
+export type {
+  ConvLayer,
+  DeconvLayer,
+  ModelLayer,
+  ModelMeta,
+  ConvLayerJSON,
+  DeconvLayerJSON,
+  ModelLayerJSON,
+  Kongyo2xModelJSON,
+} from "./model/types.js";
 export type { Tensor } from "./core/tensor.js";
 export { createTensor, fromData, cloneTensor, stackChannels, clamp01 } from "./core/tensor.js";
-export type { Engine } from "./engine/runModel.js";
 export { runModel } from "./engine/runModel.js";
+export { buildNetwork, convNetworkJSON, LEAKY_RELU_ALPHA, IDENTITY_ALPHA } from "./brain/network.js";
+export type { BrainNetworkJSON, BrainNeuralNetwork } from "./brain/network.js";
 export {
   reconstructImage,
   reconstructScale,

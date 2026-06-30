@@ -1,7 +1,7 @@
 import Module from "node:module";
 import { createRequire } from "node:module";
 
-export interface BrainNeuralNetworkJSON {
+export interface BrainNetworkJSON {
   type: "NeuralNetwork";
   sizes: number[];
   layers: Array<{ weights: number[][]; biases: number[] }>;
@@ -21,7 +21,8 @@ export interface BrainNeuralNetworkJSON {
 }
 
 export interface BrainNeuralNetwork {
-  fromJSON(json: BrainNeuralNetworkJSON): BrainNeuralNetwork;
+  fromJSON(json: BrainNetworkJSON): BrainNeuralNetwork;
+  toJSON(): BrainNetworkJSON;
   run(input: Float32Array): Float32Array;
   trainOpts: { leakyReluAlpha: number };
 }
@@ -40,7 +41,7 @@ function installGlStub(): void {
   internals._load = (request: string, parent: unknown, isMain: boolean): unknown => {
     if (request === "gl") {
       return function glUnavailable(): never {
-        throw new Error("headless-gl is not available; waifu2x-brainjs uses brain.js on the CPU only.");
+        throw new Error("headless-gl is not available; kongyo2x runs brain.js on the CPU only.");
       };
     }
     return original(request, parent, isMain);

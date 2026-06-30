@@ -1,15 +1,13 @@
 import { clamp01, createTensor, getChannel } from "./core/tensor.js";
 import type { Tensor } from "./core/tensor.js";
-import type { Waifu2xModel } from "./model/model.js";
+import type { Kongyo2xModel } from "./model/model.js";
 import { runModel } from "./engine/runModel.js";
-import type { Engine } from "./engine/runModel.js";
 import { rgb2yuv, yuv2rgb } from "./image/color.js";
 import { crop, padEdge } from "./image/pad.js";
 import { resizeLanczos, resizeNearest } from "./image/resize.js";
 
 export interface ReconstructOptions {
   blockSize?: number;
-  engine?: Engine;
 }
 
 interface Padding {
@@ -58,14 +56,7 @@ function placeBlock(target: Tensor, block: Tensor, oy0: number, ox0: number): vo
   }
 }
 
-function reconstructNN(
-  model: Waifu2xModel,
-  x: Tensor,
-  innerScale: number,
-  offset: number,
-  blockSize: number,
-  engine: Engine,
-): Tensor {
+function reconstructNN(model: Kongyo2xModel, x: Tensor, innerScale: number, offset: number, blockSize: number): Tensor {
   const newX = createTensor(x.channels, x.height * innerScale, x.width * innerScale);
   const inputBlockSize = blockSize;
   const outputSize = blockSize * innerScale - offset * 2;
@@ -74,7 +65,7 @@ function reconstructNN(
   for (let i0 = 0; i0 + inputBlockSize <= x.height; i0 += step) {
     for (let j0 = 0; j0 + inputBlockSize <= x.width; j0 += step) {
       const block = crop(x, j0, i0, j0 + inputBlockSize, i0 + inputBlockSize);
-      const out = runModel(model, block, engine);
+      const out = runModel(model, block);
       if (out.height !== outputSize || out.width !== outputSize) {
         throw new Error(`model produced ${out.width}x${out.height}, expected ${outputSize}x${outputSize}`);
       }
@@ -84,40 +75,40 @@ function reconstructNN(
   return newX;
 }
 
-function resolve(options: ReconstructOptions): { blockSize: number; engine: Engine } {
-  return { blockSize: options.blockSize ?? 128, engine: options.engine ?? "fast" };
+function resolve(options: ReconstructOptions): { blockSize: number } {
+  return { blockSize: options.blockSize ?? 128 };
 }
 
-export function reconstructImageY(model: Waifu2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
-  const { blockSize, engine } = resolve(options);
+export function reconstructImageY(model: Kongyo2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
+  const { blockSize } = resolve(options);
   const offset = model.meta.offset;
   const p = paddingParams(rgb.width, rgb.height, offset, 1, blockSize);
   const padded = padEdge(rgb, p.padW1, p.padW2, p.padH1, p.padH2);
   const yuv = rgb2yuv(padded);
   const yPlane = getChannel(yuv, 0);
-  const refined = reconstructNN(model, yPlane, 1, offset, blockSize, engine);
+  const refined = reconstructNN(model, yPlane, 1, offset, blockSize);
   const yuvCrop = crop(yuv, p.padW1, p.padH1, p.padW1 + rgb.width, p.padH1 + rgb.height);
   const yCrop = clamp01(crop(refined, 0, 0, rgb.width, rgb.height));
   yuvCrop.data.set(yCrop.data, 0);
   return clamp01(yuv2rgb(yuvCrop));
 }
 
-export function reconstructImageRgb(model: Waifu2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
-  const { blockSize, engine } = resolve(options);
+export function reconstructImageRgb(model: Kongyo2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
+  const { blockSize } = resolve(options);
   const offset = model.meta.offset;
   const p = paddingParams(rgb.width, rgb.height, offset, 1, blockSize);
   const padded = padEdge(rgb, p.padW1, p.padW2, p.padH1, p.padH2);
-  const refined = reconstructNN(model, padded, 1, offset, blockSize, engine);
+  const refined = reconstructNN(model, padded, 1, offset, blockSize);
   return clamp01(crop(refined, 0, 0, rgb.width, rgb.height));
 }
 
 export function reconstructScaleY(
-  model: Waifu2xModel,
+  model: Kongyo2xModel,
   scale: number,
   rgb: Tensor,
   options: ReconstructOptions = {},
 ): Tensor {
-  const { blockSize, engine } = resolve(options);
+  const { blockSize } = resolve(options);
   const offset = model.meta.offset;
   const innerScale = model.meta.scaleFactor;
   const finalW = rgb.width * scale;
@@ -137,19 +128,19 @@ export function reconstructScaleY(
   const padded = padEdge(processed, p.padW1, p.padW2, p.padH1, p.padH2);
   const yuv = rgb2yuv(padded);
   const yPlane = getChannel(yuv, 0);
-  const refined = reconstructNN(model, yPlane, nnInnerScale, offset, blockSize, engine);
+  const refined = reconstructNN(model, yPlane, nnInnerScale, offset, blockSize);
   const yCrop = clamp01(crop(refined, 0, 0, finalW, finalH));
   lanczos.data.set(yCrop.data, 0);
   return clamp01(yuv2rgb(lanczos));
 }
 
 export function reconstructScaleRgb(
-  model: Waifu2xModel,
+  model: Kongyo2xModel,
   scale: number,
   rgb: Tensor,
   options: ReconstructOptions = {},
 ): Tensor {
-  const { blockSize, engine } = resolve(options);
+  const { blockSize } = resolve(options);
   const offset = model.meta.offset;
   const innerScale = model.meta.scaleFactor;
   let processed: Tensor;
@@ -163,16 +154,16 @@ export function reconstructScaleRgb(
   }
   const p = paddingParams(processed.width, processed.height, offset, nnInnerScale, blockSize);
   const padded = padEdge(processed, p.padW1, p.padW2, p.padH1, p.padH2);
-  const refined = reconstructNN(model, padded, nnInnerScale, offset, blockSize, engine);
+  const refined = reconstructNN(model, padded, nnInnerScale, offset, blockSize);
   return clamp01(crop(refined, 0, 0, processed.width * nnInnerScale, processed.height * nnInnerScale));
 }
 
-export function reconstructImage(model: Waifu2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
+export function reconstructImage(model: Kongyo2xModel, rgb: Tensor, options: ReconstructOptions = {}): Tensor {
   return model.isRgb ? reconstructImageRgb(model, rgb, options) : reconstructImageY(model, rgb, options);
 }
 
 export function reconstructScale(
-  model: Waifu2xModel,
+  model: Kongyo2xModel,
   scale: number,
   rgb: Tensor,
   options: ReconstructOptions = {},
