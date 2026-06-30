@@ -8,7 +8,7 @@ import { computeLoss } from "../src/train/loss.js";
 import { Adam, Ema, clipGradNorm, cosineLr } from "../src/train/optimizer.js";
 import { createRng } from "../src/train/rng.js";
 import { trainModel, defaultTrainConfig } from "../src/train/trainer.js";
-import { SyntheticDataset } from "../src/train/data.js";
+import { SyntheticDataset, degrade } from "../src/train/data.js";
 import { brainConvForward } from "../src/engine/brainConv.js";
 import { buildNetwork, convNetworkJSON } from "../src/brain/network.js";
 import { runModel } from "../src/engine/runModel.js";
@@ -188,6 +188,17 @@ describe("exported model runs identically through the inference engine", () => {
     const model = Kongyo2xModel.fromJSON(net.toModelJSON(meta));
     const viaEngine = runModel(model, input);
     expect(maxAbsDiff(direct, viaEngine)).toBeLessThan(1e-4);
+  });
+});
+
+describe("degrade", () => {
+  it("preserves channel count and dimensions for multi-channel noise input", () => {
+    const clean = randomTensor(3, 6, 8, 4);
+    const noisy = degrade(clean, { kind: "noise", noiseSigma: 0.05, scale: 1 }, createRng(1));
+    expect(noisy.channels).toBe(3);
+    expect(noisy.height).toBe(6);
+    expect(noisy.width).toBe(8);
+    expect(maxAbsDiff(noisy, clean)).toBeGreaterThan(0);
   });
 });
 

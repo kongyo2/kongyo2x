@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { Tensor } from "../core/tensor.js";
-import { createTensor } from "../core/tensor.js";
+import { cloneTensor, createTensor } from "../core/tensor.js";
 import { crop } from "../image/pad.js";
 import { rgb2y } from "../image/color.js";
 import { resizeLanczos, resizeNearest } from "../image/resize.js";
@@ -93,7 +93,6 @@ export function generateLuma(size: number, rng: Rng): Tensor {
 }
 
 export function degrade(clean: Tensor, deg: Degradation, rng: Rng): Tensor {
-  const size = clean.width;
   let input: Tensor;
   if (deg.kind === "scale") {
     const low = resizeLanczos(
@@ -103,8 +102,7 @@ export function degrade(clean: Tensor, deg: Degradation, rng: Rng): Tensor {
     );
     input = resizeNearest(low, clean.width, clean.height);
   } else {
-    input = createTensor(1, clean.height, size);
-    input.data.set(clean.data);
+    input = cloneTensor(clean);
   }
   if (deg.noiseSigma > 0) {
     const sigma = deg.noiseSigma * (0.7 + 0.3 * rng.next());
