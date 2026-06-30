@@ -157,7 +157,7 @@ export class Kongyo2xModel {
     if (!stored) {
       return undefined;
     }
-    const network = stored.network;
+    const network = this.convNets[index]?.toJSON() ?? stored.network;
     if (network.options.activation !== "leaky-relu" || network.trainOpts.activation !== "leaky-relu") {
       return undefined;
     }

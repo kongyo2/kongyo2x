@@ -15,14 +15,16 @@ export function runModel(model: Kongyo2xModel, input: Tensor): Tensor {
       current = spatialFullConvolution(current, layer);
       continue;
     }
-    const params = model.convParams(index);
-    if (useGpu && params) {
-      try {
-        current = gpuConvForward(current, layer, params.weights, params.bias, params.alpha);
-        continue;
-      } catch {
-        disableGpu();
-        useGpu = false;
+    if (useGpu) {
+      const params = model.convParams(index);
+      if (params) {
+        try {
+          current = gpuConvForward(current, layer, params.weights, params.bias, params.alpha);
+          continue;
+        } catch {
+          disableGpu();
+          useGpu = false;
+        }
       }
     }
     const net = model.convNetwork(index);
@@ -30,6 +32,7 @@ export function runModel(model: Kongyo2xModel, input: Tensor): Tensor {
       current = brainConvForward(current, layer, net);
       continue;
     }
+    const params = model.convParams(index);
     if (params) {
       current = cpuConvForward(current, layer, params.weights, params.bias, params.alpha);
       continue;
