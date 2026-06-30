@@ -153,7 +153,7 @@ export class Kongyo2xModel {
     if (network.options.activation !== "leaky-relu" || network.trainOpts.activation !== "leaky-relu") {
       return undefined;
     }
-    if (network.layers.length !== 2 || network.options.hiddenLayers.length !== 0) {
+    if (network.layers.length !== 2) {
       return undefined;
     }
     const dense = network.layers[1];
