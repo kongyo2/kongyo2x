@@ -77,7 +77,6 @@ export class Kongyo2xModel {
   readonly layers: ModelLayer[];
   private readonly convNets: Array<BrainNeuralNetwork | undefined>;
   private readonly convJSON: Array<ConvLayerJSON | undefined>;
-  private readonly convParamsCache: Array<ConvParams | undefined>;
 
   private constructor(
     meta: ModelMeta,
@@ -89,7 +88,6 @@ export class Kongyo2xModel {
     this.layers = layers;
     this.convNets = convNets;
     this.convJSON = convJSON;
-    this.convParamsCache = new Array<ConvParams | undefined>(layers.length).fill(undefined);
   }
 
   static fromJSON(json: Kongyo2xModelJSON): Kongyo2xModel {
@@ -147,16 +145,15 @@ export class Kongyo2xModel {
   }
 
   convParams(index: number): ConvParams | undefined {
-    const cached = this.convParamsCache[index];
-    if (cached) {
-      return cached;
-    }
     const net = this.convNets[index];
     if (!net) {
       return undefined;
     }
     const network = net.toJSON();
     if (network.options.activation !== "leaky-relu" || network.trainOpts.activation !== "leaky-relu") {
+      return undefined;
+    }
+    if (network.layers.length !== 2 || network.options.hiddenLayers.length !== 0) {
       return undefined;
     }
     const dense = network.layers[1];
@@ -173,13 +170,11 @@ export class Kongyo2xModel {
         weights[o * inputSize + k] = row[k] ?? 0;
       }
     }
-    const params: ConvParams = {
+    return {
       weights,
       bias: Float32Array.from(dense.biases),
       alpha: network.trainOpts.leakyReluAlpha,
     };
-    this.convParamsCache[index] = params;
-    return params;
   }
 
   get isRgb(): boolean {

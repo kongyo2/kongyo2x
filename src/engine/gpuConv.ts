@@ -74,7 +74,27 @@ function probeKernel(this: KernelThis, x: Float32Array): number {
   return (x[this.thread.x] as number) + 1;
 }
 
+interface GlContext {
+  getExtension(name: string): { destroy(): void } | null;
+}
+
+type CreateGlContext = (width: number, height: number, options: Record<string, unknown>) => GlContext | null;
+
 const nodeRequire = createRequire(import.meta.url);
+
+function glUsable(): boolean {
+  try {
+    const createContext = nodeRequire("gl") as CreateGlContext;
+    const context = createContext(1, 1, {});
+    if (!context) {
+      return false;
+    }
+    context.getExtension("STACKGL_destroy_context")?.destroy();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function createGpu(): GpuInstance {
   const { GPU } = nodeRequire("gpu.js") as GpuModule;
@@ -94,6 +114,9 @@ let available: boolean | undefined;
 
 function probeGpu(): boolean {
   if (process.env.KONGYO2X_DISABLE_GPU === "1" || process.env.KONGYO2X_GPU === "0") {
+    return false;
+  }
+  if (!glUsable()) {
     return false;
   }
   let instance: GpuInstance | undefined;
