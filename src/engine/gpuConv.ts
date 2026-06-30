@@ -82,9 +82,21 @@ type CreateGlContext = (width: number, height: number, options: Record<string, u
 
 const nodeRequire = createRequire(import.meta.url);
 
+let gpuJsEntryCache: string | undefined;
+
+// Resolve gpu.js through brain.js (its peer) and gl through gpu.js, so a strict,
+// non-hoisting resolver (pnpm, Yarn PnP) still finds packages kongyo2x does not
+// declare directly.
+function gpuJsEntry(): string {
+  if (gpuJsEntryCache === undefined) {
+    gpuJsEntryCache = createRequire(nodeRequire.resolve("brain.js")).resolve("gpu.js");
+  }
+  return gpuJsEntryCache;
+}
+
 function glUsable(): boolean {
   try {
-    const createContext = nodeRequire("gl") as CreateGlContext;
+    const createContext = createRequire(gpuJsEntry())("gl") as CreateGlContext;
     const context = createContext(1, 1, {});
     if (!context) {
       return false;
@@ -97,7 +109,7 @@ function glUsable(): boolean {
 }
 
 function createGpu(): GpuInstance {
-  const { GPU } = nodeRequire("gpu.js") as GpuModule;
+  const { GPU } = nodeRequire(gpuJsEntry()) as GpuModule;
   return new GPU();
 }
 

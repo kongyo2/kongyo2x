@@ -50,23 +50,17 @@ function installGlStub(): void {
   };
 }
 
-function glRequireable(): boolean {
-  try {
-    return require("gl") != null;
-  } catch {
-    return false;
-  }
-}
-
 let cached: BrainModule | undefined;
 
 export function loadBrain(): BrainModule {
   if (cached) {
     return cached;
   }
-  if (!glRequireable()) {
+  try {
+    cached = require("brain.js") as BrainModule;
+  } catch {
     installGlStub();
+    cached = require("brain.js") as BrainModule;
   }
-  cached = require("brain.js") as BrainModule;
   return cached;
 }
