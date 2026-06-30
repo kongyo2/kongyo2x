@@ -1,11 +1,11 @@
 {
-  "name": "waifu2x-brainjs",
+  "name": "kongyo2x",
   "version": "0.1.0",
-  "description": "A faithful TypeScript port of waifu2x (image super-resolution and noise reduction) that runs the convolutional networks through brain.js.",
+  "description": "Image super-resolution and noise reduction in TypeScript, running its convolutional networks through brain.js.",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "waifu2x-brainjs": "./dist/cli.js"
+    "kongyo2x": "./dist/cli.js"
   },
   "exports": {
     ".": {
@@ -32,7 +32,7 @@
     "lint:strict": "oxlint --deny-warnings",
     "test": "vitest run",
     "cli": "tsx src/cli.ts",
-    "download-models": "tsx scripts/download-models.ts"
+    "convert-models": "tsx scripts/convert-models.ts"
   },
   "dependencies": {
     "brain.js": "2.0.0-beta.24",
