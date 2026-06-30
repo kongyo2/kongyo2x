@@ -1,6 +1,6 @@
 {
   "name": "@kongyo2/kongyo2x",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Image super-resolution in TypeScript: MLPconv networks trained from scratch and run through brain.js.",
   "type": "module",
   "license": "MIT",
@@ -61,9 +61,11 @@
     "train": "tsx scripts/train.ts"
   },
   "dependencies": {
-    "brain.js": "2.0.0-beta.24",
     "jpeg-js": "0.4.4",
     "pngjs": "7.0.0"
+  },
+  "optionalDependencies": {
+    "brain.js": "2.0.0-beta.24"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
