@@ -4,7 +4,7 @@
 
 ### Performance
 
-- SIMD-vectorized the WebAssembly convolution kernel: four output pixels per iteration, one per `f64x2` lane, each still accumulating its taps in scalar order. End-to-end upscaling with the bundled models is roughly 3x faster, and outputs stay bit-identical to 0.3.x.
+- SIMD-vectorized the WebAssembly convolution kernel: eight output pixels per iteration, one per `f64x2` lane, each still accumulating its taps in scalar order. End-to-end upscaling with the bundled models is ~3.7x faster, and outputs stay bit-identical to 0.3.x.
 - Inference weights and biases are uploaded to Wasm memory once per model instead of once per block and layer.
 - Raw conv parameters are extracted from the model JSON once per layer and cached; `runModel` no longer re-serializes networks on every block.
 - brain.js networks are built lazily and only consulted for layers the fast engines cannot express.
