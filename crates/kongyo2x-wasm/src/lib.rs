@@ -97,6 +97,56 @@ unsafe fn conv_valid_simd(
         for oy in 0..out_h {
             let out_row = out_plane + oy * out_w;
             let mut ox = 0isize;
+            // Eight pixels per iteration: four independent accumulator chains
+            // hide the f64x2_add latency behind the loads.
+            while ox + 8 <= out_w {
+                let mut acc0 = f64x2_splat(bias_value);
+                let mut acc1 = f64x2_splat(bias_value);
+                let mut acc2 = f64x2_splat(bias_value);
+                let mut acc3 = f64x2_splat(bias_value);
+                let mut w = w_base;
+                for i in 0..ip {
+                    let plane_base = i * in_h * in_w;
+                    for ky in 0..kh {
+                        let row = plane_base + (oy + ky) * in_w + ox;
+                        for kx in 0..kw {
+                            let wv = f64x2_splat(*weights.get_unchecked(w as usize) as f64);
+                            // Eight f32 inputs; ox + kx + 7 <= out_w + kw - 2 = in_w - 1
+                            // keeps both 16-byte loads inside the row.
+                            let ptr = in_data.as_ptr().add((row + kx) as usize);
+                            let iv0 = v128_load(ptr.cast());
+                            let iv1 = v128_load(ptr.add(4).cast());
+                            let l0 = f64x2_promote_low_f32x4(iv0);
+                            let h0 = f64x2_promote_low_f32x4(i32x4_shuffle::<2, 3, 2, 3>(iv0, iv0));
+                            let l1 = f64x2_promote_low_f32x4(iv1);
+                            let h1 = f64x2_promote_low_f32x4(i32x4_shuffle::<2, 3, 2, 3>(iv1, iv1));
+                            acc0 = f64x2_add(acc0, f64x2_mul(l0, wv));
+                            acc1 = f64x2_add(acc1, f64x2_mul(h0, wv));
+                            acc2 = f64x2_add(acc2, f64x2_mul(l1, wv));
+                            acc3 = f64x2_add(acc3, f64x2_mul(h1, wv));
+                            w += 1;
+                        }
+                    }
+                }
+                let r0 = f64x2_max(acc0, f64x2_mul(alpha_v, acc0));
+                let r1 = f64x2_max(acc1, f64x2_mul(alpha_v, acc1));
+                let r2 = f64x2_max(acc2, f64x2_mul(alpha_v, acc2));
+                let r3 = f64x2_max(acc3, f64x2_mul(alpha_v, acc3));
+                let f0 = f32x4_demote_f64x2_zero(r0);
+                let f1 = f32x4_demote_f64x2_zero(r1);
+                let f2 = f32x4_demote_f64x2_zero(r2);
+                let f3 = f32x4_demote_f64x2_zero(r3);
+                let base = (out_row + ox) as usize;
+                *out.get_unchecked_mut(base) = f32x4_extract_lane::<0>(f0);
+                *out.get_unchecked_mut(base + 1) = f32x4_extract_lane::<1>(f0);
+                *out.get_unchecked_mut(base + 2) = f32x4_extract_lane::<0>(f1);
+                *out.get_unchecked_mut(base + 3) = f32x4_extract_lane::<1>(f1);
+                *out.get_unchecked_mut(base + 4) = f32x4_extract_lane::<0>(f2);
+                *out.get_unchecked_mut(base + 5) = f32x4_extract_lane::<1>(f2);
+                *out.get_unchecked_mut(base + 6) = f32x4_extract_lane::<0>(f3);
+                *out.get_unchecked_mut(base + 7) = f32x4_extract_lane::<1>(f3);
+                ox += 8;
+            }
             while ox + 4 <= out_w {
                 let mut acc0 = f64x2_splat(bias_value);
                 let mut acc1 = f64x2_splat(bias_value);
