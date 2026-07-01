@@ -1,7 +1,24 @@
+import { createRequire } from "node:module";
 import { convNetworkJSON, LEAKY_RELU_ALPHA, IDENTITY_ALPHA } from "../src/index.js";
 import type { ConvLayerJSON, DeconvLayerJSON, Kongyo2xModelJSON, ModelLayerJSON } from "../src/index.js";
 import { createTensor } from "../src/core/tensor.js";
 import type { Tensor } from "../src/core/tensor.js";
+
+const require = createRequire(import.meta.url);
+
+/**
+ * brain.js is an optionalDependency: its native gl build fails on headless
+ * machines and npm then skips the package entirely. Tests that compare against
+ * real brain.js behavior are skipped in that case instead of failing.
+ */
+export function brainAvailable(): boolean {
+  try {
+    require.resolve("brain.js");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -109,6 +126,15 @@ export function randomImage(channels: number, height: number, width: number, see
     t.data[i] = rand();
   }
   return t;
+}
+
+export function hasNaN(t: Tensor): boolean {
+  for (let i = 0; i < t.data.length; i++) {
+    if (Number.isNaN(t.data[i] as number)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function maxAbsDiff(a: Tensor, b: Tensor): number {

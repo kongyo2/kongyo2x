@@ -1,4 +1,4 @@
-import { cloneTensor, createTensor, fromData } from "../core/tensor.js";
+import { cloneTensor, fromData } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
 import { getWasm, disableWasm } from "../wasm/loader.js";
 
@@ -61,7 +61,7 @@ export function makeBorder(rgb: Tensor, alpha: Tensor, offset: number): Tensor {
     const maskWeight = box3x3Sum(mask, height, width);
     for (let ch = 0; ch < 3; ch++) {
       const channelBase = ch * size;
-      const blurred = box3x3Sum(out.subarray(channelBase, channelBase + size) as Float32Array, height, width);
+      const blurred = box3x3Sum(out.subarray(channelBase, channelBase + size), height, width);
       for (let p = 0; p < size; p++) {
         if (mask[p] === 0) {
           out[channelBase + p] = (blurred[p] as number) / ((maskWeight[p] as number) + eps);
@@ -80,13 +80,4 @@ export function makeBorder(rgb: Tensor, alpha: Tensor, offset: number): Tensor {
     out[i] = v < 0 ? 0 : v > 1 ? 1 : v;
   }
   return result;
-}
-
-export function ensureAlphaPlane(alpha: Tensor): Tensor {
-  if (alpha.channels !== 1) {
-    const plane = createTensor(1, alpha.height, alpha.width);
-    plane.data.set(alpha.data.subarray(0, alpha.height * alpha.width));
-    return plane;
-  }
-  return alpha;
 }

@@ -9,9 +9,9 @@ import { rgb2yuv, yuv2rgb } from "../src/image/color.js";
 import { resizeNearest } from "../src/image/resize.js";
 import { padEdge, crop } from "../src/image/pad.js";
 import type { ConvLayer, DeconvLayer } from "../src/model/types.js";
-import { randomImage, maxAbsDiff } from "./helpers.js";
+import { brainAvailable, randomImage, maxAbsDiff } from "./helpers.js";
 
-describe("brain conv", () => {
+describe.skipIf(!brainAvailable())("brain conv", () => {
   it("matches a hand-computed 3x3 valid convolution", () => {
     const input = createTensor(1, 3, 3);
     input.data.set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -108,6 +108,28 @@ describe("pad/crop", () => {
     expect(padded.height).toBe(8);
     const cropped = crop(padded, 2, 2, 6, 6);
     expect(maxAbsDiff(cropped, input)).toBe(0);
+  });
+
+  it("replicates asymmetric edges correctly", () => {
+    const input = randomImage(2, 3, 5, 8);
+    const padded = padEdge(input, 1, 3, 0, 2);
+    expect(padded.width).toBe(9);
+    expect(padded.height).toBe(5);
+    expect(padded.data[0]).toBe(input.data[0]);
+    const lastRowStart = 4 * 9;
+    expect(padded.data[lastRowStart + 8]).toBe(input.data[2 * 5 + 4]);
+  });
+
+  it("rejects a crop region outside the input", () => {
+    const input = randomImage(1, 4, 4, 3);
+    expect(() => crop(input, 0, 0, 5, 4)).toThrow(/exceeds/);
+    expect(() => crop(input, -1, 0, 3, 3)).toThrow(/exceeds/);
+    expect(() => crop(input, 2, 2, 2, 3)).toThrow(/invalid crop/);
+  });
+
+  it("rejects negative padding", () => {
+    const input = randomImage(1, 4, 4, 3);
+    expect(() => padEdge(input, -1, 0, 0, 0)).toThrow(/non-negative/);
   });
 });
 

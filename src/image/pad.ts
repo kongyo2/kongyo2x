@@ -2,6 +2,9 @@ import { createTensor } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
 
 export function padEdge(input: Tensor, left: number, right: number, top: number, bottom: number): Tensor {
+  if (left < 0 || right < 0 || top < 0 || bottom < 0) {
+    throw new Error(`invalid padding ${left},${right},${top},${bottom} (expected non-negative values)`);
+  }
   const inH = input.height;
   const inW = input.width;
   const outH = inH + top + bottom;
@@ -21,14 +24,12 @@ export function padEdge(input: Tensor, left: number, right: number, top: number,
       }
       const srcRow = srcPlane + sy * inW;
       const dstRow = dstPlane + oy * outW;
-      for (let ox = 0; ox < outW; ox++) {
-        let sx = ox - left;
-        if (sx < 0) {
-          sx = 0;
-        } else if (sx >= inW) {
-          sx = inW - 1;
-        }
-        dst[dstRow + ox] = src[srcRow + sx] as number;
+      if (left > 0) {
+        dst.fill(src[srcRow] as number, dstRow, dstRow + left);
+      }
+      dst.set(src.subarray(srcRow, srcRow + inW), dstRow + left);
+      if (right > 0) {
+        dst.fill(src[srcRow + inW - 1] as number, dstRow + left + inW, dstRow + outW);
       }
     }
   }
@@ -41,6 +42,9 @@ export function crop(input: Tensor, x1: number, y1: number, x2: number, y2: numb
   if (outW <= 0 || outH <= 0) {
     throw new Error(`invalid crop region ${x1},${y1} -> ${x2},${y2}`);
   }
+  if (x1 < 0 || y1 < 0 || x2 > input.width || y2 > input.height) {
+    throw new Error(`crop region ${x1},${y1} -> ${x2},${y2} exceeds input ${input.width}x${input.height}`);
+  }
   const out = createTensor(input.channels, outH, outW);
   const src = input.data;
   const dst = out.data;
@@ -51,10 +55,7 @@ export function crop(input: Tensor, x1: number, y1: number, x2: number, y2: numb
     const dstPlane = c * outH * outW;
     for (let y = 0; y < outH; y++) {
       const srcRow = srcPlane + (y1 + y) * inW + x1;
-      const dstRow = dstPlane + y * outW;
-      for (let x = 0; x < outW; x++) {
-        dst[dstRow + x] = src[srcRow + x] as number;
-      }
+      dst.set(src.subarray(srcRow, srcRow + outW), dstPlane + y * outW);
     }
   }
   return out;

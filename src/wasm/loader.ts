@@ -215,47 +215,57 @@ function build(ex: WasmExports): WasmKernels {
   const alloc = (elements: number): number => ex.kw_alloc(elements * 4);
   const free = (ptr: number, elements: number): void => ex.kw_dealloc(ptr, elements * 4);
 
+  // Inference weights and biases never change once a model is loaded, so each
+  // distinct Float32Array is uploaded to Wasm memory once and the buffer is
+  // reused for every subsequent block and layer call; it is reclaimed when the
+  // source array is garbage collected. Training kernels keep per-call uploads
+  // because the optimizer rewrites their parameter arrays in place.
+  const staticUploads = new WeakMap<Float32Array, number>();
+  const reclaimer = new FinalizationRegistry<{ ptr: number; elements: number }>(({ ptr, elements }) => {
+    free(ptr, elements);
+  });
+  const uploadStatic = (data: Float32Array): number => {
+    let ptr = staticUploads.get(data);
+    if (ptr === undefined) {
+      ptr = alloc(data.length);
+      f32(ptr, data.length).set(data);
+      staticUploads.set(data, ptr);
+      reclaimer.register(data, { ptr, elements: data.length });
+    }
+    return ptr;
+  };
+
   return {
     convForward(input, inH, inW, weights, bias, ip, op, kW, kH, sx, sy, px, py, alpha, outH, outW) {
       const inLen = ip * inH * inW;
-      const wLen = op * ip * kH * kW;
       const outLen = op * outH * outW;
+      const wPtr = uploadStatic(weights);
+      const bPtr = uploadStatic(bias);
       const inPtr = alloc(inLen);
-      const wPtr = alloc(wLen);
-      const bPtr = alloc(op);
       const outPtr = alloc(outLen);
       try {
         f32(inPtr, inLen).set(input.subarray(0, inLen));
-        f32(wPtr, wLen).set(weights.subarray(0, wLen));
-        f32(bPtr, op).set(bias.subarray(0, op));
         ex.conv_forward(inPtr, inH, inW, wPtr, bPtr, outPtr, ip, op, kW, kH, sx, sy, px, py, alpha);
         return Float32Array.from(f32(outPtr, outLen));
       } finally {
         free(inPtr, inLen);
-        free(wPtr, wLen);
-        free(bPtr, op);
         free(outPtr, outLen);
       }
     },
 
     deconvForward(input, inH, inW, weights, bias, ip, op, kW, kH, sx, sy, px, py, adjX, adjY, outH, outW) {
       const inLen = ip * inH * inW;
-      const wLen = ip * op * kH * kW;
       const outLen = op * outH * outW;
+      const wPtr = uploadStatic(weights);
+      const bPtr = uploadStatic(bias);
       const inPtr = alloc(inLen);
-      const wPtr = alloc(wLen);
-      const bPtr = alloc(op);
       const outPtr = alloc(outLen);
       try {
         f32(inPtr, inLen).set(input.subarray(0, inLen));
-        f32(wPtr, wLen).set(weights.subarray(0, wLen));
-        f32(bPtr, op).set(bias.subarray(0, op));
         ex.deconv_forward(inPtr, inH, inW, wPtr, bPtr, outPtr, ip, op, kW, kH, sx, sy, px, py, adjX, adjY);
         return Float32Array.from(f32(outPtr, outLen));
       } finally {
         free(inPtr, inLen);
-        free(wPtr, wLen);
-        free(bPtr, op);
         free(outPtr, outLen);
       }
     },

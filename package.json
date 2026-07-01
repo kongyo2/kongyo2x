@@ -1,6 +1,6 @@
 {
   "name": "@kongyo2/kongyo2x",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Image super-resolution in TypeScript with a Rust/WebAssembly compute core: MLPconv networks trained from scratch, with a pure-TypeScript fallback.",
   "type": "module",
   "license": "MIT",

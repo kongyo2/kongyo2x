@@ -4,6 +4,9 @@
 //! `f32` but every multiply-accumulate runs through an `f64` accumulator, which
 //! is what JavaScript does implicitly when it reads a `Float32Array` element
 //! into a `number`. That keeps the Wasm and pure-TS backends bit-identical.
+//! The SIMD convolution path vectorizes across output pixels — one pixel per
+//! `f64x2` lane — so every pixel still accumulates its taps in the exact
+//! scalar order and the bit-identical guarantee holds.
 
 // The kernels use a flat C ABI (many scalar shape args by design) and a manual
 // `v<0?0:v>1?1:v` clamp chosen to match JavaScript's clamp semantics exactly.
@@ -55,6 +58,150 @@ unsafe fn iin<'a>(ptr: *const i32, len: usize) -> &'a [i32] {
     slice::from_raw_parts(ptr, len)
 }
 
+/// Valid convolution (stride 1, no padding) with a fused leaky-ReLU,
+/// vectorized across output pixels: four pixels per iteration, one per `f64x2`
+/// lane. Each pixel accumulates its taps in exactly the scalar order, so the
+/// results are bit-identical to the scalar path and the TypeScript reference.
+///
+/// # Safety
+/// All slices must have the lengths implied by the shape arguments, with
+/// `out_h == in_h - kh + 1` and `out_w == in_w - kw + 1`.
+#[cfg(target_arch = "wasm32")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn conv_valid_simd(
+    in_data: &[f32],
+    weights: &[f32],
+    bias: &[f32],
+    out: &mut [f32],
+    ip: isize,
+    op: isize,
+    in_h: isize,
+    in_w: isize,
+    kh: isize,
+    kw: isize,
+    out_h: isize,
+    out_w: isize,
+    alpha: f64,
+) {
+    use core::arch::wasm32::{
+        f32x4_demote_f64x2_zero, f32x4_extract_lane, f64x2_add, f64x2_max, f64x2_mul,
+        f64x2_promote_low_f32x4, f64x2_splat, i32x4_shuffle, v128_load,
+    };
+    let weight_stride = ip * kh * kw;
+    let plane_size = out_h * out_w;
+    let alpha_v = f64x2_splat(alpha);
+    for o in 0..op {
+        let bias_value = *bias.get_unchecked(o as usize) as f64;
+        let w_base = o * weight_stride;
+        let out_plane = o * plane_size;
+        for oy in 0..out_h {
+            let out_row = out_plane + oy * out_w;
+            let mut ox = 0isize;
+            // Eight pixels per iteration: four independent accumulator chains
+            // hide the f64x2_add latency behind the loads.
+            while ox + 8 <= out_w {
+                let mut acc0 = f64x2_splat(bias_value);
+                let mut acc1 = f64x2_splat(bias_value);
+                let mut acc2 = f64x2_splat(bias_value);
+                let mut acc3 = f64x2_splat(bias_value);
+                let mut w = w_base;
+                for i in 0..ip {
+                    let plane_base = i * in_h * in_w;
+                    for ky in 0..kh {
+                        let row = plane_base + (oy + ky) * in_w + ox;
+                        for kx in 0..kw {
+                            let wv = f64x2_splat(*weights.get_unchecked(w as usize) as f64);
+                            // Eight f32 inputs; ox + kx + 7 <= out_w + kw - 2 = in_w - 1
+                            // keeps both 16-byte loads inside the row.
+                            let ptr = in_data.as_ptr().add((row + kx) as usize);
+                            let iv0 = v128_load(ptr.cast());
+                            let iv1 = v128_load(ptr.add(4).cast());
+                            let l0 = f64x2_promote_low_f32x4(iv0);
+                            let h0 = f64x2_promote_low_f32x4(i32x4_shuffle::<2, 3, 2, 3>(iv0, iv0));
+                            let l1 = f64x2_promote_low_f32x4(iv1);
+                            let h1 = f64x2_promote_low_f32x4(i32x4_shuffle::<2, 3, 2, 3>(iv1, iv1));
+                            acc0 = f64x2_add(acc0, f64x2_mul(l0, wv));
+                            acc1 = f64x2_add(acc1, f64x2_mul(h0, wv));
+                            acc2 = f64x2_add(acc2, f64x2_mul(l1, wv));
+                            acc3 = f64x2_add(acc3, f64x2_mul(h1, wv));
+                            w += 1;
+                        }
+                    }
+                }
+                let r0 = f64x2_max(acc0, f64x2_mul(alpha_v, acc0));
+                let r1 = f64x2_max(acc1, f64x2_mul(alpha_v, acc1));
+                let r2 = f64x2_max(acc2, f64x2_mul(alpha_v, acc2));
+                let r3 = f64x2_max(acc3, f64x2_mul(alpha_v, acc3));
+                let f0 = f32x4_demote_f64x2_zero(r0);
+                let f1 = f32x4_demote_f64x2_zero(r1);
+                let f2 = f32x4_demote_f64x2_zero(r2);
+                let f3 = f32x4_demote_f64x2_zero(r3);
+                let base = (out_row + ox) as usize;
+                *out.get_unchecked_mut(base) = f32x4_extract_lane::<0>(f0);
+                *out.get_unchecked_mut(base + 1) = f32x4_extract_lane::<1>(f0);
+                *out.get_unchecked_mut(base + 2) = f32x4_extract_lane::<0>(f1);
+                *out.get_unchecked_mut(base + 3) = f32x4_extract_lane::<1>(f1);
+                *out.get_unchecked_mut(base + 4) = f32x4_extract_lane::<0>(f2);
+                *out.get_unchecked_mut(base + 5) = f32x4_extract_lane::<1>(f2);
+                *out.get_unchecked_mut(base + 6) = f32x4_extract_lane::<0>(f3);
+                *out.get_unchecked_mut(base + 7) = f32x4_extract_lane::<1>(f3);
+                ox += 8;
+            }
+            while ox + 4 <= out_w {
+                let mut acc0 = f64x2_splat(bias_value);
+                let mut acc1 = f64x2_splat(bias_value);
+                let mut w = w_base;
+                for i in 0..ip {
+                    let plane_base = i * in_h * in_w;
+                    for ky in 0..kh {
+                        let row = plane_base + (oy + ky) * in_w + ox;
+                        for kx in 0..kw {
+                            let wv = f64x2_splat(*weights.get_unchecked(w as usize) as f64);
+                            // Four f32 inputs; ox + kx + 3 <= out_w + kw - 2 = in_w - 1
+                            // keeps the 16-byte load inside the row.
+                            let iv = v128_load(in_data.as_ptr().add((row + kx) as usize).cast());
+                            let lo = f64x2_promote_low_f32x4(iv);
+                            let hi = f64x2_promote_low_f32x4(i32x4_shuffle::<2, 3, 2, 3>(iv, iv));
+                            acc0 = f64x2_add(acc0, f64x2_mul(lo, wv));
+                            acc1 = f64x2_add(acc1, f64x2_mul(hi, wv));
+                            w += 1;
+                        }
+                    }
+                }
+                let r0 = f64x2_max(acc0, f64x2_mul(alpha_v, acc0));
+                let r1 = f64x2_max(acc1, f64x2_mul(alpha_v, acc1));
+                let f0 = f32x4_demote_f64x2_zero(r0);
+                let f1 = f32x4_demote_f64x2_zero(r1);
+                let base = (out_row + ox) as usize;
+                *out.get_unchecked_mut(base) = f32x4_extract_lane::<0>(f0);
+                *out.get_unchecked_mut(base + 1) = f32x4_extract_lane::<1>(f0);
+                *out.get_unchecked_mut(base + 2) = f32x4_extract_lane::<0>(f1);
+                *out.get_unchecked_mut(base + 3) = f32x4_extract_lane::<1>(f1);
+                ox += 4;
+            }
+            while ox < out_w {
+                let mut sum = bias_value;
+                let mut w = w_base;
+                for i in 0..ip {
+                    let plane_base = i * in_h * in_w;
+                    for ky in 0..kh {
+                        let row_base = plane_base + (oy + ky) * in_w + ox;
+                        for kx in 0..kw {
+                            sum += (*in_data.get_unchecked((row_base + kx) as usize) as f64)
+                                * (*weights.get_unchecked(w as usize) as f64);
+                            w += 1;
+                        }
+                    }
+                }
+                let scaled = alpha * sum;
+                let val = if sum >= scaled { sum } else { scaled };
+                *out.get_unchecked_mut((out_row + ox) as usize) = val as f32;
+                ox += 1;
+            }
+        }
+    }
+}
+
 /// Inference convolution with a fused leaky-ReLU, mirroring `cpuConvForward`.
 ///
 /// # Safety
@@ -101,6 +248,13 @@ pub unsafe extern "C" fn conv_forward(
     // Valid convolution (stride 1, no padding) — the shape every kongyo2x conv
     // layer uses. Every tap is in range, so the per-tap bounds check is dropped.
     if px == 0 && py == 0 && sx == 1 && sy == 1 {
+        #[cfg(target_arch = "wasm32")]
+        {
+            conv_valid_simd(
+                in_data, weights, bias, out, ip, op, in_h, in_w, kh, kw, out_h, out_w, alpha,
+            );
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         for o in 0..op {
             let bias_value = bias[o as usize] as f64;
             let w_base = o * weight_stride;
