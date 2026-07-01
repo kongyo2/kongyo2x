@@ -184,11 +184,26 @@ function instantiate(): WasmExports | undefined {
     const bytes = readFileSync(WASM_URL);
     const module = new WebAssembly.Module(bytes);
     const instance = new WebAssembly.Instance(module, {});
-    const exports = instance.exports as unknown as WasmExports;
-    if (typeof exports.conv_forward !== "function" || !(exports.memory instanceof WebAssembly.Memory)) {
+    const exports = instance.exports as Record<string, unknown>;
+    if (!(exports.memory instanceof WebAssembly.Memory)) {
       return undefined;
     }
-    return exports;
+    const required = [
+      "kw_alloc",
+      "kw_dealloc",
+      "conv_forward",
+      "deconv_forward",
+      "conv_forward_train",
+      "conv_backward_train",
+      "resize_lanczos",
+      "make_border",
+    ];
+    for (const name of required) {
+      if (typeof exports[name] !== "function") {
+        return undefined;
+      }
+    }
+    return exports as unknown as WasmExports;
   } catch {
     return undefined;
   }
@@ -374,6 +389,11 @@ export function getWasm(): WasmKernels | undefined {
     kernels = ex ? build(ex) : undefined;
   }
   return kernels;
+}
+
+export function disableWasm(): void {
+  resolved = true;
+  kernels = undefined;
 }
 
 export function isWasmAvailable(): boolean {

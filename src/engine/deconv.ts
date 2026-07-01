@@ -1,7 +1,7 @@
 import { createTensor, fromData } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
 import type { DeconvLayer } from "../model/types.js";
-import { getWasm } from "../wasm/loader.js";
+import { getWasm, disableWasm } from "../wasm/loader.js";
 
 export function deconvOutputSize(inputSize: number, kernel: number, stride: number, pad: number, adj: number): number {
   return (inputSize - 1) * stride - 2 * pad + kernel + adj;
@@ -19,26 +19,30 @@ export function spatialFullConvolution(input: Tensor, layer: DeconvLayer): Tenso
 
   const wasm = getWasm();
   if (wasm) {
-    const data = wasm.deconvForward(
-      input.data,
-      inH,
-      inW,
-      layer.weights,
-      layer.bias,
-      layer.inputPlanes,
-      layer.outputPlanes,
-      kW,
-      kH,
-      strideX,
-      strideY,
-      padX,
-      padY,
-      adjX,
-      adjY,
-      outH,
-      outW,
-    );
-    return fromData(layer.outputPlanes, outH, outW, data);
+    try {
+      const data = wasm.deconvForward(
+        input.data,
+        inH,
+        inW,
+        layer.weights,
+        layer.bias,
+        layer.inputPlanes,
+        layer.outputPlanes,
+        kW,
+        kH,
+        strideX,
+        strideY,
+        padX,
+        padY,
+        adjX,
+        adjY,
+        outH,
+        outW,
+      );
+      return fromData(layer.outputPlanes, outH, outW, data);
+    } catch {
+      disableWasm();
+    }
   }
 
   const out = createTensor(layer.outputPlanes, outH, outW);

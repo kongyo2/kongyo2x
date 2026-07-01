@@ -3,7 +3,9 @@ name: Wasm
 # Builds the Rust numeric kernels to WebAssembly and checks that the module
 # still instantiates and exports every kernel the TypeScript loader expects.
 # The optimized wasm/kongyo2x.wasm artifact is committed, so this job guards the
-# Rust sources rather than regenerating the shipped binary.
+# Rust sources and also confirms the shipped binary loads and exports every
+# kernel (a stale or corrupt blob would otherwise fall back to the pure-TS
+# backend at runtime and go unnoticed).
 
 on:
   push:
@@ -16,6 +18,7 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/**"
       - "scripts/build-wasm.sh"
+      - "wasm/kongyo2x.wasm"
       - ".github/workflows/wasm.yml"
 
 permissions:
@@ -43,12 +46,16 @@ jobs:
         run: |
           node -e "
           const fs = require('fs');
-          const bytes = fs.readFileSync('target/wasm32-unknown-unknown/release/kongyo2x_wasm.wasm');
-          const mod = new WebAssembly.Module(bytes);
-          const names = WebAssembly.Module.exports(mod).map((e) => e.name);
           const need = ['memory','kw_alloc','kw_dealloc','conv_forward','deconv_forward','conv_forward_train','conv_backward_train','resize_lanczos','make_border'];
-          const missing = need.filter((n) => !names.includes(n));
-          if (missing.length) { console.error('missing exports:', missing); process.exit(1); }
-          new WebAssembly.Instance(mod, {});
-          console.log('ok: all kernels exported and module instantiates');
+          function check(label, path) {
+            const bytes = fs.readFileSync(path);
+            const mod = new WebAssembly.Module(bytes);
+            const names = WebAssembly.Module.exports(mod).map((e) => e.name);
+            const missing = need.filter((n) => !names.includes(n));
+            if (missing.length) { console.error(label + ': missing exports:', missing); process.exit(1); }
+            new WebAssembly.Instance(mod, {});
+            console.log('ok: ' + label + ' exports all kernels and instantiates');
+          }
+          check('freshly built', 'target/wasm32-unknown-unknown/release/kongyo2x_wasm.wasm');
+          check('shipped wasm/kongyo2x.wasm', 'wasm/kongyo2x.wasm');
           "

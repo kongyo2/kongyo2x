@@ -3,6 +3,8 @@ import { createTensor } from "../src/core/tensor.js";
 import { brainConvForward } from "../src/engine/brainConv.js";
 import { buildNetwork, convNetworkJSON, IDENTITY_ALPHA } from "../src/brain/network.js";
 import { spatialFullConvolution, deconvOutputSize } from "../src/engine/deconv.js";
+import { cpuConvForward } from "../src/engine/cpuConv.js";
+import { makeBorder } from "../src/image/alpha.js";
 import { rgb2yuv, yuv2rgb } from "../src/image/color.js";
 import { resizeNearest } from "../src/image/resize.js";
 import { padEdge, crop } from "../src/image/pad.js";
@@ -106,5 +108,34 @@ describe("pad/crop", () => {
     expect(padded.height).toBe(8);
     const cropped = crop(padded, 2, 2, 6, 6);
     expect(maxAbsDiff(cropped, input)).toBe(0);
+  });
+});
+
+describe("wasm/ts guards", () => {
+  it("rejects a convolution whose kernel exceeds the padded input", () => {
+    const input = createTensor(1, 2, 2);
+    const layer: ConvLayer = {
+      kind: "conv",
+      inputPlanes: 1,
+      outputPlanes: 1,
+      kernelWidth: 3,
+      kernelHeight: 3,
+      strideX: 1,
+      strideY: 1,
+      padX: 0,
+      padY: 0,
+    };
+    const weights = new Float32Array(9);
+    const bias = new Float32Array(1);
+    expect(() => cpuConvForward(input, layer, weights, bias, 0)).toThrow(/larger than/);
+  });
+
+  it("treats a negative border offset as a no-op instead of looping", () => {
+    const rgb = randomImage(3, 4, 5, 9);
+    const alpha = createTensor(1, 4, 5);
+    alpha.data.fill(1);
+    const zero = makeBorder(rgb, alpha, 0);
+    const negative = makeBorder(rgb, alpha, -1);
+    expect(maxAbsDiff(negative, zero)).toBe(0);
   });
 });
