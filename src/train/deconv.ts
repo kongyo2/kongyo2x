@@ -1,5 +1,8 @@
 import type { Tensor } from "../core/tensor.js";
 import { createTensor } from "../core/tensor.js";
+import { deconvOutputSize } from "../engine/deconv.js";
+
+export { deconvOutputSize } from "../engine/deconv.js";
 
 export interface DeconvLayerParams {
   cin: number;
@@ -17,10 +20,6 @@ export interface DeconvLayerParams {
   bias: Float32Array;
   gradWeights: Float32Array;
   gradBias: Float32Array;
-}
-
-export function deconvOutputSize(inputSize: number, kernel: number, stride: number, pad: number, adj: number): number {
-  return (inputSize - 1) * stride - 2 * pad + kernel + adj;
 }
 
 export function deconvForward(input: Tensor, layer: DeconvLayerParams): Tensor {
@@ -46,32 +45,30 @@ export function deconvForward(input: Tensor, layer: DeconvLayerParams): Tensor {
   const inData = input.data;
   const weights = layer.weights;
   const planeIn = inH * inW;
+  const kernelSize = kh * kw;
   for (let i = 0; i < cin; i++) {
     const inPlane = i * planeIn;
-    const weightInBase = i * cout * kh * kw;
+    const weightInBase = i * cout * kernelSize;
     for (let iy = 0; iy < inH; iy++) {
       const oyBase = iy * strideY - padY;
+      const kyStart = oyBase < 0 ? -oyBase : 0;
+      const kyEnd = kh < outH - oyBase ? kh : outH - oyBase;
       for (let ix = 0; ix < inW; ix++) {
         const v = inData[inPlane + iy * inW + ix] as number;
         if (v === 0) {
           continue;
         }
         const oxBase = ix * strideX - padX;
+        const kxStart = oxBase < 0 ? -oxBase : 0;
+        const kxEnd = kw < outW - oxBase ? kw : outW - oxBase;
         for (let o = 0; o < cout; o++) {
-          const weightBase = weightInBase + o * kh * kw;
-          const outPlane = o * planeOut;
-          for (let ky = 0; ky < kh; ky++) {
-            const oy = oyBase + ky;
-            if (oy < 0 || oy >= outH) {
-              continue;
-            }
-            const outRow = outPlane + oy * outW;
+          const weightBase = weightInBase + o * kernelSize;
+          const outPlane = o * planeOut + oyBase * outW + oxBase;
+          for (let ky = kyStart; ky < kyEnd; ky++) {
+            const outRow = outPlane + ky * outW;
             const weightRow = weightBase + ky * kw;
-            for (let kx = 0; kx < kw; kx++) {
-              const ox = oxBase + kx;
-              if (ox >= 0 && ox < outW) {
-                outData[outRow + ox] = (outData[outRow + ox] as number) + (weights[weightRow + kx] as number) * v;
-              }
+            for (let kx = kxStart; kx < kxEnd; kx++) {
+              outData[outRow + kx] = (outData[outRow + kx] as number) + (weights[weightRow + kx] as number) * v;
             }
           }
         }

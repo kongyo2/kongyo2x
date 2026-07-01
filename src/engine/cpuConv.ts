@@ -53,35 +53,40 @@ export function cpuConvForward(
   const out = createTensor(outputPlanes, outH, outW);
   const outData = out.data;
   const inData = input.data;
-  const weightStride = inputPlanes * kH * kW;
+  const kernelSize = kH * kW;
+  const weightStride = inputPlanes * kernelSize;
   const planeSize = outH * outW;
+  const inPlaneSize = inH * inW;
 
+  // Kernel taps outside the input contribute nothing, so clip the tap ranges
+  // up front instead of bounds-checking every tap. The surviving taps
+  // accumulate in the original order, keeping results bit-identical.
   for (let o = 0; o < outputPlanes; o++) {
     const biasValue = bias[o] as number;
     const wBase = o * weightStride;
     const outPlane = o * planeSize;
     for (let oy = 0; oy < outH; oy++) {
       const baseY = oy * strideY - padY;
+      const kyStart = baseY < 0 ? -baseY : 0;
+      const kyEnd = kH < inH - baseY ? kH : inH - baseY;
+      const outRow = outPlane + oy * outW;
       for (let ox = 0; ox < outW; ox++) {
         const baseX = ox * strideX - padX;
+        const kxStart = baseX < 0 ? -baseX : 0;
+        const kxEnd = kW < inW - baseX ? kW : inW - baseX;
         let sum = biasValue;
-        let w = wBase;
         for (let i = 0; i < inputPlanes; i++) {
-          const planeBase = i * inH * inW;
-          for (let ky = 0; ky < kH; ky++) {
-            const iy = baseY + ky;
-            const rowInRange = iy >= 0 && iy < inH;
-            const rowBase = planeBase + iy * inW;
-            for (let kx = 0; kx < kW; kx++) {
-              const ix = baseX + kx;
-              if (rowInRange && ix >= 0 && ix < inW) {
-                sum += (inData[rowBase + ix] as number) * (weights[w] as number);
-              }
-              w++;
+          const planeBase = i * inPlaneSize + baseY * inW + baseX;
+          const wPlane = wBase + i * kernelSize;
+          for (let ky = kyStart; ky < kyEnd; ky++) {
+            const rowBase = planeBase + ky * inW;
+            const wRow = wPlane + ky * kW;
+            for (let kx = kxStart; kx < kxEnd; kx++) {
+              sum += (inData[rowBase + kx] as number) * (weights[wRow + kx] as number);
             }
           }
         }
-        outData[outPlane + oy * outW + ox] = Math.max(sum, alpha * sum);
+        outData[outRow + ox] = Math.max(sum, alpha * sum);
       }
     }
   }

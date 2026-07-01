@@ -15,7 +15,7 @@ import { buildNetwork, convNetworkJSON } from "../src/brain/network.js";
 import { runModel } from "../src/engine/runModel.js";
 import { Kongyo2xModel } from "../src/model/model.js";
 import type { ConvLayer } from "../src/model/types.js";
-import { maxAbsDiff } from "./helpers.js";
+import { brainAvailable, maxAbsDiff } from "./helpers.js";
 
 function randomConv(cin: number, cout: number, kh: number, kw: number, alpha: number, seed: number): ConvLayerParams {
   const rng = createRng(seed);
@@ -50,7 +50,7 @@ function randomTensor(channels: number, height: number, width: number, seed: num
   return t;
 }
 
-describe("conv forward matches brain.js", () => {
+describe.skipIf(!brainAvailable())("conv forward matches brain.js", () => {
   for (const alpha of [0.1, 1.0]) {
     it(`reproduces brain.js output for alpha=${alpha}`, () => {
       const cin = 3;

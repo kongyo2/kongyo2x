@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { Kongyo2xModel } from "./model/model.js";
 import type { Kongyo2xModelJSON } from "./model/types.js";
 import type { Tensor } from "./core/tensor.js";
-import { stackChannels } from "./core/tensor.js";
+import { clamp01, stackChannels } from "./core/tensor.js";
 import { reconstructScale } from "./reconstruct.js";
 import type { ReconstructOptions } from "./reconstruct.js";
 import { rgb2y } from "./image/color.js";
@@ -41,10 +41,12 @@ function upscaleAlpha(
   mode: AlphaScaleMode,
   options: ReconstructOptions,
 ): Tensor {
-  const finalW = alpha.width * scale;
-  const finalH = alpha.height * scale;
+  // Round exactly like reconstructScale so the alpha plane always matches the
+  // RGB output dimensions, fractional scale factors included.
+  const finalW = Math.max(1, Math.round(alpha.width * scale));
+  const finalH = Math.max(1, Math.round(alpha.height * scale));
   if (mode === "lanczos") {
-    return resizeLanczos(alpha, finalW, finalH);
+    return clamp01(resizeLanczos(alpha, finalW, finalH));
   }
   const rgb = stackChannels([alpha, alpha, alpha]);
   const scaled = reconstructScale(scaleModel, scale, rgb, options);

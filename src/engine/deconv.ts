@@ -56,33 +56,31 @@ export function spatialFullConvolution(input: Tensor, layer: DeconvLayer): Tenso
     outData.fill(biasValue, o * planeSize, (o + 1) * planeSize);
   }
 
+  const kernelSize = kH * kW;
   for (let i = 0; i < layer.inputPlanes; i++) {
     const inPlaneBase = i * inH * inW;
-    const weightInBase = i * layer.outputPlanes * kH * kW;
+    const weightInBase = i * layer.outputPlanes * kernelSize;
     for (let iy = 0; iy < inH; iy++) {
+      const oyBase = iy * strideY - padY;
+      const kyStart = oyBase < 0 ? -oyBase : 0;
+      const kyEnd = kH < outH - oyBase ? kH : outH - oyBase;
       for (let ix = 0; ix < inW; ix++) {
         const v = inData[inPlaneBase + iy * inW + ix] as number;
         if (v === 0) {
           continue;
         }
-        const oyBase = iy * strideY - padY;
         const oxBase = ix * strideX - padX;
+        const kxStart = oxBase < 0 ? -oxBase : 0;
+        const kxEnd = kW < outW - oxBase ? kW : outW - oxBase;
         for (let o = 0; o < layer.outputPlanes; o++) {
-          const weightBase = weightInBase + o * kH * kW;
-          const outPlaneBase = o * planeSize;
-          for (let ky = 0; ky < kH; ky++) {
-            const oy = oyBase + ky;
-            if (oy < 0 || oy >= outH) {
-              continue;
-            }
-            const outRowBase = outPlaneBase + oy * outW;
+          const weightBase = weightInBase + o * kernelSize;
+          const outPlaneBase = o * planeSize + oyBase * outW + oxBase;
+          for (let ky = kyStart; ky < kyEnd; ky++) {
+            const outRowBase = outPlaneBase + ky * outW;
             const weightRowBase = weightBase + ky * kW;
-            for (let kx = 0; kx < kW; kx++) {
-              const ox = oxBase + kx;
-              if (ox >= 0 && ox < outW) {
-                const pos = outRowBase + ox;
-                outData[pos] = (outData[pos] as number) + (weights[weightRowBase + kx] as number) * v;
-              }
+            for (let kx = kxStart; kx < kxEnd; kx++) {
+              const pos = outRowBase + kx;
+              outData[pos] = (outData[pos] as number) + (weights[weightRowBase + kx] as number) * v;
             }
           }
         }
