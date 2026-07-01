@@ -87,11 +87,22 @@ export function deconvBackward(
   dOut: Tensor,
   computeGradInput: boolean,
 ): Tensor | null {
-  const { cin, cout, kh, kw, strideX, strideY, padX, padY } = layer;
+  const { cin, cout, kh, kw, strideX, strideY, padX, padY, adjX, adjY } = layer;
   const inH = input.height;
   const inW = input.width;
+  if (input.channels !== cin) {
+    throw new Error(`deconv backward expected ${cin} input planes, received ${input.channels}`);
+  }
+  if (dOut.channels !== cout) {
+    throw new Error(`deconv backward expected ${cout} gradient planes, received ${dOut.channels}`);
+  }
   const outH = dOut.height;
   const outW = dOut.width;
+  const expectedH = deconvOutputSize(inH, kh, strideY, padY, adjY);
+  const expectedW = deconvOutputSize(inW, kw, strideX, padX, adjX);
+  if (outH !== expectedH || outW !== expectedW) {
+    throw new Error(`deconv backward gradient is ${outW}x${outH}, expected ${expectedW}x${expectedH}`);
+  }
 
   const inData = input.data;
   const dOutData = dOut.data;

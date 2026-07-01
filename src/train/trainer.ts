@@ -186,6 +186,9 @@ export function trainModel(
   dataset: Dataset,
   onProgress?: (progress: TrainProgress) => void,
 ): TrainResult {
+  if (config.channels !== 1 && config.channels !== 3) {
+    throw new Error(`unsupported channels ${config.channels} (expected 1 for luma or 3 for rgb)`);
+  }
   const scale = config.degradation.scale;
   if (config.arch === "upconv" && config.patchSize % scale !== 0) {
     throw new Error(`patch size ${config.patchSize} must be divisible by scale ${scale} for upconv`);
@@ -209,7 +212,7 @@ export function trainModel(
   const mseStart = Math.floor(config.iterations * (1 - config.mseFinetuneFrac));
   const lossAt = (step: number): LossKind => {
     if (config.loss === "mix") {
-      return step > mseStart ? "mse" : "charbonnier";
+      return step >= mseStart ? "mse" : "charbonnier";
     }
     return config.loss;
   };
@@ -218,6 +221,12 @@ export function trainModel(
   const valItems: ValItem[] = [];
   for (let i = 0; i < config.valBatch; i++) {
     const clean = dataset.sample(config.patchSize, valRng);
+    if (i === 0 && clean.channels !== config.channels) {
+      throw new Error(
+        `dataset produced ${clean.channels}-channel samples but the model expects ${config.channels}; ` +
+          `construct the dataset with ${config.channels} channels`,
+      );
+    }
     const lr = downscale(clean, scale);
     valItems.push({
       input: networkInput(lr, config.arch, clean.width, clean.height),

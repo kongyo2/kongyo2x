@@ -398,3 +398,24 @@ describe("end-to-end training", () => {
     expect(model.layers.map((l) => l.kind)).toEqual(["conv", "conv", "deconv"]);
   });
 });
+
+describe("trainer input validation", () => {
+  const tinyUpconv = (channels: number) =>
+    defaultTrainConfig({
+      arch: "upconv",
+      channels,
+      convChannels: [8],
+      patchSize: 24,
+      iterations: 1,
+      valBatch: 1,
+      logEvery: 0,
+    });
+
+  it("rejects unsupported channel counts", () => {
+    expect(() => trainModel(tinyUpconv(2), new SyntheticDataset(2))).toThrow(/unsupported channels/);
+  });
+
+  it("rejects a dataset whose channel count does not match the model", () => {
+    expect(() => trainModel(tinyUpconv(3), new SyntheticDataset(1))).toThrow(/expects 3/);
+  });
+});

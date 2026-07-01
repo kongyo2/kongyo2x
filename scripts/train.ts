@@ -98,6 +98,9 @@ function parse(argv: string[]): TrainCliOptions {
   const scale = parseInteger(values.scale as string, "scale", 1);
   const channels =
     values.channels !== undefined ? parseInteger(values.channels as string, "channels", 1) : arch === "upconv" ? 3 : 1;
+  if (channels !== 1 && channels !== 3) {
+    throw new Error(`invalid channels: ${channels} (expected 1 for luma or 3 for rgb)`);
+  }
 
   const overrides: Partial<TrainConfig> = {
     arch: arch as TrainArch,
