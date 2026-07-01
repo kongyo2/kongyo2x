@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   format:
-    name: Format
+    name: Rust format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
