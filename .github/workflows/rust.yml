@@ -1,11 +1,10 @@
-name: Wasm
+name: Rust
 
-# Builds the Rust numeric kernels to WebAssembly and checks that the module
-# still instantiates and exports every kernel the TypeScript loader expects.
-# The optimized wasm/kongyo2x.wasm artifact is committed, so this job guards the
-# Rust sources and also confirms the shipped binary loads and exports every
-# kernel (a stale or corrupt blob would otherwise fall back to the pure-TS
-# backend at runtime and go unnoticed).
+# Rust CI for the WebAssembly numeric kernels: formatting, clippy lints, and the
+# wasm build. The optimized wasm/kongyo2x.wasm artifact is committed, so the
+# build job also confirms the shipped binary instantiates and exports every
+# kernel the TypeScript loader expects (a stale or corrupt blob would otherwise
+# fall back to the pure-TS backend at runtime and go unnoticed).
 
 on:
   push:
@@ -19,7 +18,7 @@ on:
       - ".cargo/**"
       - "scripts/build-wasm.sh"
       - "wasm/kongyo2x.wasm"
-      - ".github/workflows/wasm.yml"
+      - ".github/workflows/rust.yml"
 
 permissions:
   contents: read
@@ -29,6 +28,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - run: cargo clippy -p kongyo2x-wasm --target wasm32-unknown-unknown -- -D warnings
+
   build:
     name: Build kernels
     runs-on: ubuntu-latest
