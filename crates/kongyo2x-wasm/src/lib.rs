@@ -504,9 +504,9 @@ pub unsafe extern "C" fn resize_lanczos(
                 let mut acc = 0.0f64;
                 for t in 0..x_taps {
                     acc += (*x_w.get_unchecked((base + t) as usize) as f64)
-                        * (*in_data
-                            .get_unchecked((src_row + *x_idx.get_unchecked((base + t) as usize) as isize) as usize)
-                            as f64);
+                        * (*in_data.get_unchecked(
+                            (src_row + *x_idx.get_unchecked((base + t) as usize) as isize) as usize,
+                        ) as f64);
                 }
                 *horizontal.get_unchecked_mut((dst_row + ox) as usize) = acc as f32;
             }
@@ -524,7 +524,8 @@ pub unsafe extern "C" fn resize_lanczos(
                 for t in 0..y_taps {
                     let sy = *y_idx.get_unchecked((base + t) as usize) as isize;
                     acc += (*y_w.get_unchecked((base + t) as usize) as f64)
-                        * (*horizontal.get_unchecked((src_plane + sy * out_w + ox) as usize) as f64);
+                        * (*horizontal.get_unchecked((src_plane + sy * out_w + ox) as usize)
+                            as f64);
                 }
                 *out.get_unchecked_mut((dst_row + ox) as usize) = acc as f32;
             }
