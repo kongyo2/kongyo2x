@@ -1,7 +1,8 @@
-import { createTensor } from "../core/tensor.js";
+import { createTensor, fromData } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
 import type { ConvLayer } from "../model/types.js";
 import { convOutputSize } from "./conv.js";
+import { getWasm } from "../wasm/loader.js";
 
 export function cpuConvForward(
   input: Tensor,
@@ -18,6 +19,30 @@ export function cpuConvForward(
   const inW = input.width;
   const outH = convOutputSize(inH, kH, strideY, padY);
   const outW = convOutputSize(inW, kW, strideX, padX);
+
+  const wasm = getWasm();
+  if (wasm) {
+    const data = wasm.convForward(
+      input.data,
+      inH,
+      inW,
+      weights,
+      bias,
+      inputPlanes,
+      outputPlanes,
+      kW,
+      kH,
+      strideX,
+      strideY,
+      padX,
+      padY,
+      alpha,
+      outH,
+      outW,
+    );
+    return fromData(outputPlanes, outH, outW, data);
+  }
+
   const out = createTensor(outputPlanes, outH, outW);
   const outData = out.data;
   const inData = input.data;

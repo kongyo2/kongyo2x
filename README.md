@@ -1,6 +1,6 @@
 # kongyo2x
 
-Image super-resolution in TypeScript. MLPconv networks, trained from scratch and run through [brain.js](https://brain.js.org/), upscale and denoise images — pure TypeScript, no Python.
+Image super-resolution in TypeScript. MLPconv networks, trained from scratch, upscale and denoise images — with the heavy convolutions, deconvolution, resampling, and training running in a bundled Rust/WebAssembly core (and a pure-TypeScript fallback). No Python.
 
 ## Install
 
@@ -8,7 +8,7 @@ Image super-resolution in TypeScript. MLPconv networks, trained from scratch and
 npm install @kongyo2/kongyo2x
 ```
 
-Requires Node.js 20+. For GPU acceleration kongyo2x uses brain.js and its `gpu.js` peer, which compile a native module (`gl`, headless-gl) at install time. That build needs X11/OpenGL system libraries and can't complete in a headless environment, so brain.js is an optional dependency: when the native build fails npm skips it and the install still succeeds. kongyo2x then upscales on its built-in TypeScript CPU backend, and automatically uses brain.js or `gl`-backed GPU acceleration whenever they are present.
+Requires Node.js 20+. The heavy math runs in a prebuilt Rust/WebAssembly module that ships with the package — no toolchain or build step at install time, and a pure-TypeScript fallback covers any environment where the module can't load. GPU acceleration is still available: brain.js and its `gpu.js` peer compile a native module (`gl`, headless-gl) at install time, which needs X11/OpenGL system libraries and can't complete in a headless environment, so brain.js is an optional dependency — when its native build fails npm skips it and the install still succeeds.
 
 ## CLI
 

@@ -1,5 +1,6 @@
-import { cloneTensor, createTensor } from "../core/tensor.js";
+import { cloneTensor, createTensor, fromData } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
+import { getWasm } from "../wasm/loader.js";
 
 function box3x3Sum(plane: Float32Array, height: number, width: number): Float32Array {
   const out = new Float32Array(height * width);
@@ -27,6 +28,13 @@ export function makeBorder(rgb: Tensor, alpha: Tensor, offset: number): Tensor {
     throw new Error("makeBorder expects a 3-channel RGB tensor");
   }
   const { height, width } = rgb;
+
+  const wasm = getWasm();
+  if (wasm) {
+    const data = wasm.makeBorder(rgb.data, alpha.data, height, width, offset);
+    return fromData(3, height, width, data);
+  }
+
   const size = height * width;
   const eps = 1e-7;
   const result = cloneTensor(rgb);
