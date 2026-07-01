@@ -49,7 +49,7 @@ cd kongyo2x && npm install
 npm run train -- --data ./images --scale 2 -o models/mlpconv/scale2.0x_model.json
 ```
 
-Run `npm run train -- --help` for all options.
+The default `upconv` architecture matches the shipped models: valid 3x3 convolutions followed by a 4x4 stride-2 transposed convolution over RGB (`kongyo2x_upconv`, `resize: true`). Accuracy scales with `--iterations` and real `--data` — the defaults are a fast smoke run. Pass `--arch mlpconv` for the luma-only, nearest-pre-upscale variant. Run `npm run train -- --help` for all options.
 
 ## License
 

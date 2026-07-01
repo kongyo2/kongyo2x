@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { Tensor } from "../core/tensor.js";
-import { createTensor } from "../core/tensor.js";
+import { createTensor, stackChannels } from "../core/tensor.js";
 import { crop } from "../image/pad.js";
 import { rgb2y } from "../image/color.js";
 import { resizeLanczos, resizeNearest } from "../image/resize.js";
@@ -98,8 +98,21 @@ export interface Dataset {
 }
 
 export class SyntheticDataset implements Dataset {
+  private readonly channels: number;
+
+  constructor(channels = 1) {
+    this.channels = channels;
+  }
+
   sample(size: number, rng: Rng): Tensor {
-    return generateLuma(size, rng);
+    if (this.channels === 1) {
+      return generateLuma(size, rng);
+    }
+    const planes: Tensor[] = [];
+    for (let c = 0; c < this.channels; c++) {
+      planes.push(generateLuma(size, rng));
+    }
+    return stackChannels(planes);
   }
 }
 
@@ -110,7 +123,7 @@ export class ImageDataset implements Dataset {
     this.planes = planes;
   }
 
-  static async load(dir: string, minSize: number): Promise<ImageDataset> {
+  static async load(dir: string, minSize: number, channels = 1): Promise<ImageDataset> {
     const entries = await readdir(dir);
     const planes: Tensor[] = [];
     for (const entry of entries) {
@@ -120,9 +133,9 @@ export class ImageDataset implements Dataset {
       }
       const buffer = await readFile(join(dir, entry));
       const image = decodeImage(buffer);
-      const y = rgb2y(image.rgb);
-      if (y.width >= minSize && y.height >= minSize) {
-        planes.push(y);
+      const plane = channels === 3 ? image.rgb : rgb2y(image.rgb);
+      if (plane.width >= minSize && plane.height >= minSize) {
+        planes.push(plane);
       }
     }
     if (planes.length === 0) {

@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { createTensor } from "../src/core/tensor.js";
 import type { Tensor } from "../src/core/tensor.js";
 import { convForward, type ConvLayerParams } from "../src/train/conv.js";
+import { deconvForward, deconvBackward, type DeconvLayerParams } from "../src/train/deconv.js";
 import { leakyRelu } from "../src/train/activation.js";
-import { MlpconvNetwork, type LayerSpec, type Parameter } from "../src/train/network.js";
+import { MlpconvNetwork, UpconvNetwork, type LayerSpec, type Parameter } from "../src/train/network.js";
 import { computeLoss } from "../src/train/loss.js";
 import { Adam, Ema, clipGradNorm, cosineLr } from "../src/train/optimizer.js";
 import { createRng } from "../src/train/rng.js";
@@ -189,6 +190,21 @@ describe("exported model runs identically through the inference engine", () => {
     const viaEngine = runModel(model, input);
     expect(maxAbsDiff(direct, viaEngine)).toBeLessThan(1e-4);
   });
+
+  it("matches UpconvNetwork.predict after serialization", () => {
+    const net = UpconvNetwork.create(3, [4, 6], 2, createRng(5));
+    const input = randomTensor(3, 12, 12, 8);
+    const direct = net.predict(input);
+
+    const meta = { archName: "kongyo2x_upconv", channels: 3, offset: net.offset, scaleFactor: 2, resize: true };
+    const model = Kongyo2xModel.fromJSON(net.toModelJSON(meta));
+    expect(model.meta.resize).toBe(true);
+    expect(model.layers.map((l) => l.kind)).toEqual(["conv", "conv", "deconv"]);
+    const viaEngine = runModel(model, input);
+    expect(direct.channels).toBe(3);
+    expect([direct.height, direct.width]).toEqual([12, 12]);
+    expect(maxAbsDiff(direct, viaEngine)).toBeLessThan(1e-4);
+  });
 });
 
 describe("degrade", () => {
@@ -202,9 +218,139 @@ describe("degrade", () => {
   });
 });
 
+describe("deconv analytical gradients match finite differences", () => {
+  it("passes a numerical gradient check for a 4x4 stride-2 transposed conv", () => {
+    const cin = 2;
+    const cout = 3;
+    const kh = 4;
+    const kw = 4;
+    const rng = createRng(21);
+    const size = cin * cout * kh * kw;
+    const weights = new Float32Array(size);
+    for (let i = 0; i < size; i++) {
+      weights[i] = (rng.next() - 0.5) * 0.6;
+    }
+    const bias = Float32Array.from([0.1, -0.2, 0.05]);
+    const layer: DeconvLayerParams = {
+      cin,
+      cout,
+      kh,
+      kw,
+      strideX: 2,
+      strideY: 2,
+      padX: 3,
+      padY: 3,
+      adjX: 0,
+      adjY: 0,
+      weights,
+      bias,
+      gradWeights: new Float32Array(size),
+      gradBias: new Float32Array(cout),
+    };
+    const input = randomTensor(cin, 5, 5, 3);
+    const probe = deconvForward(input, layer);
+    const target = randomTensor(cout, probe.height, probe.width, 99);
+
+    const lossOf = (): number => {
+      const out = deconvForward(input, layer);
+      let sum = 0;
+      for (let i = 0; i < out.data.length; i++) {
+        const d = (out.data[i] as number) - (target.data[i] as number);
+        sum += d * d;
+      }
+      return sum / out.data.length;
+    };
+
+    const out = deconvForward(input, layer);
+    const n = out.data.length;
+    const dOut = createTensor(cout, out.height, out.width);
+    for (let i = 0; i < n; i++) {
+      dOut.data[i] = (2 * ((out.data[i] as number) - (target.data[i] as number))) / n;
+    }
+    layer.gradWeights.fill(0);
+    layer.gradBias.fill(0);
+    const dInput = deconvBackward(input, layer, dOut, true) as Tensor;
+
+    const eps = 1e-3;
+    const check = (read: () => number, write: (v: number) => void, analytic: number): void => {
+      const original = read();
+      write(original + eps);
+      const plus = lossOf();
+      write(original - eps);
+      const minus = lossOf();
+      write(original);
+      const numeric = (plus - minus) / (2 * eps);
+      expect(Math.abs(numeric - analytic)).toBeLessThan(1e-3 + 2e-2 * Math.abs(analytic));
+    };
+
+    for (const idx of [0, 5, 17, 40, size - 1]) {
+      check(
+        () => weights[idx] as number,
+        (v) => (weights[idx] = v),
+        layer.gradWeights[idx] as number,
+      );
+    }
+    for (let o = 0; o < cout; o++) {
+      check(
+        () => bias[o] as number,
+        (v) => (bias[o] = v),
+        layer.gradBias[o] as number,
+      );
+    }
+    for (const idx of [0, 7, 24]) {
+      check(
+        () => input.data[idx] as number,
+        (v) => (input.data[idx] = v),
+        dInput.data[idx] as number,
+      );
+    }
+  });
+});
+
+describe("upconv network gradients match finite differences", () => {
+  it("passes a numerical gradient check through the deconv head and conv stack", () => {
+    const net = UpconvNetwork.create(3, [4, 5], 2, createRng(11));
+    const input = randomTensor(3, 10, 10, 3);
+    const probe = net.predict(input);
+    const target = randomTensor(3, probe.height, probe.width, 42);
+
+    const evalLoss = (): number => computeLoss(net.predict(input), target, "mse").loss;
+
+    net.zeroGrad();
+    const cache = net.forward(input);
+    const { grad } = computeLoss(cache.output, target, "mse");
+    net.backward(cache, grad);
+
+    const params = net.parameters();
+    const probes: Array<[number, number]> = [
+      [0, 0],
+      [0, 5],
+      [1, 1],
+      [2, 3],
+      [3, 0],
+      [params.length - 2, 0],
+      [params.length - 1, 1],
+    ];
+    const eps = 1e-3;
+    for (const [pj, idx] of probes) {
+      const param = params[pj] as Parameter;
+      const original = param.value[idx] as number;
+      param.value[idx] = original + eps;
+      const lossPlus = evalLoss();
+      param.value[idx] = original - eps;
+      const lossMinus = evalLoss();
+      param.value[idx] = original;
+      const numeric = (lossPlus - lossMinus) / (2 * eps);
+      const analytic = param.grad[idx] as number;
+      expect(Math.abs(numeric - analytic)).toBeLessThan(1e-3 + 3e-2 * Math.abs(analytic));
+    }
+  });
+});
+
 describe("end-to-end training", () => {
-  it("improves over the untrained model and reduces the loss", () => {
+  it("improves an mlpconv model over the untrained baseline and reduces the loss", () => {
     const config = defaultTrainConfig({
+      arch: "mlpconv",
       degradation: { scale: 2 },
       iterations: 120,
       batchSize: 4,
@@ -215,11 +361,40 @@ describe("end-to-end training", () => {
       valBatch: 6,
       seed: 7,
     });
-    const result = trainModel(config, new SyntheticDataset());
+    const result = trainModel(config, new SyntheticDataset(1));
+    expect(result.meta.resize).toBe(false);
     expect(result.history.length).toBeGreaterThan(0);
     const first = result.history[0]?.loss as number;
     const last = result.history[result.history.length - 1]?.loss as number;
     expect(last).toBeLessThan(first);
     expect(result.finalValPsnr).toBeGreaterThan(result.initialValPsnr + 3);
+  });
+
+  it("trains an rgb upconv model and reduces the loss", () => {
+    const config = defaultTrainConfig({
+      arch: "upconv",
+      channels: 3,
+      convChannels: [8, 16],
+      degradation: { scale: 2 },
+      iterations: 150,
+      batchSize: 4,
+      patchSize: 24,
+      warmup: 20,
+      logEvery: 50,
+      valBatch: 6,
+      seed: 7,
+    });
+    const result = trainModel(config, new SyntheticDataset(3));
+    expect(result.meta.archName).toBe("kongyo2x_upconv");
+    expect(result.meta.resize).toBe(true);
+    expect(result.meta.channels).toBe(3);
+    expect(result.meta.offset).toBe(6);
+    const first = result.history[0]?.loss as number;
+    const last = result.history[result.history.length - 1]?.loss as number;
+    expect(last).toBeLessThan(first);
+    expect(result.finalValPsnr).toBeGreaterThan(result.initialValPsnr + 1);
+
+    const model = Kongyo2xModel.fromJSON(result.network.toModelJSON(result.meta));
+    expect(model.layers.map((l) => l.kind)).toEqual(["conv", "conv", "deconv"]);
   });
 });
