@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["crates/kongyo2x-wasm"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,5 +1,6 @@
-import { createTensor } from "../core/tensor.js";
+import { createTensor, fromData } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
+import { getWasm } from "../wasm/loader.js";
 
 export function resizeNearest(input: Tensor, outW: number, outH: number): Tensor {
   const inH = input.height;
@@ -97,6 +98,25 @@ export function resizeLanczos(input: Tensor, outW: number, outH: number, a = 3):
   const inW = input.width;
   const xTap = buildLanczosTaps(inW, outW, a);
   const yTap = buildLanczosTaps(inH, outH, a);
+
+  const wasm = getWasm();
+  if (wasm) {
+    const data = wasm.resizeLanczos(
+      input.data,
+      input.channels,
+      inH,
+      inW,
+      xTap.indices,
+      xTap.weights,
+      xTap.taps,
+      outW,
+      yTap.indices,
+      yTap.weights,
+      yTap.taps,
+      outH,
+    );
+    return fromData(input.channels, outH, outW, data);
+  }
 
   const horizontal = createTensor(input.channels, inH, outW);
   {

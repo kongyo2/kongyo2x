@@ -1,5 +1,6 @@
 import type { Tensor } from "../core/tensor.js";
-import { createTensor } from "../core/tensor.js";
+import { createTensor, fromData } from "../core/tensor.js";
+import { getWasm } from "../wasm/loader.js";
 
 export interface ConvLayerParams {
   cin: number;
@@ -58,6 +59,25 @@ export function convForward(input: Tensor, layer: ConvLayerParams): Tensor {
   if (outH <= 0 || outW <= 0) {
     throw new Error(`conv kernel ${kw}x${kh} is larger than input ${input.width}x${input.height}`);
   }
+
+  const wasm = getWasm();
+  if (wasm) {
+    const data = wasm.convForwardTrain(
+      input.data,
+      input.height,
+      input.width,
+      layer.weights,
+      layer.bias,
+      cin,
+      cout,
+      kh,
+      kw,
+      outH,
+      outW,
+    );
+    return fromData(cout, outH, outW, data);
+  }
+
   const k = cin * kh * kw;
   const p = outH * outW;
   const col = im2col(input, kh, kw, outH, outW, k);
@@ -92,6 +112,28 @@ export function convBackward(
   const inW = input.width;
   const outH = dPre.height;
   const outW = dPre.width;
+
+  const wasm = getWasm();
+  if (wasm) {
+    const din = wasm.convBackwardTrain(
+      input.data,
+      inH,
+      inW,
+      layer.weights,
+      dPre.data,
+      outH,
+      outW,
+      layer.gradWeights,
+      layer.gradBias,
+      cin,
+      cout,
+      kh,
+      kw,
+      computeGradInput,
+    );
+    return din ? fromData(cin, inH, inW, din) : null;
+  }
+
   const k = cin * kh * kw;
   const p = outH * outW;
   const col = im2col(input, kh, kw, outH, outW, k);

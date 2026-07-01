@@ -3,6 +3,9 @@ dist
 coverage
 *.tsbuildinfo
 .DS_Store
+/target
+/crates/**/target
+Cargo.lock.bak
 /models/**/*.json
 !/models/.gitkeep
 !/models/mlpconv/scale2.0x_model.json
