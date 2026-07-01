@@ -2,7 +2,7 @@ import { createTensor, fromData } from "../core/tensor.js";
 import type { Tensor } from "../core/tensor.js";
 import type { ConvLayer } from "../model/types.js";
 import { convOutputSize } from "./conv.js";
-import { getWasm } from "../wasm/loader.js";
+import { getWasm, disableWasm } from "../wasm/loader.js";
 
 export function cpuConvForward(
   input: Tensor,
@@ -19,28 +19,35 @@ export function cpuConvForward(
   const inW = input.width;
   const outH = convOutputSize(inH, kH, strideY, padY);
   const outW = convOutputSize(inW, kW, strideX, padX);
+  if (outH <= 0 || outW <= 0) {
+    throw new Error(`conv kernel ${kW}x${kH} is larger than padded input ${inW}x${inH}`);
+  }
 
   const wasm = getWasm();
   if (wasm) {
-    const data = wasm.convForward(
-      input.data,
-      inH,
-      inW,
-      weights,
-      bias,
-      inputPlanes,
-      outputPlanes,
-      kW,
-      kH,
-      strideX,
-      strideY,
-      padX,
-      padY,
-      alpha,
-      outH,
-      outW,
-    );
-    return fromData(outputPlanes, outH, outW, data);
+    try {
+      const data = wasm.convForward(
+        input.data,
+        inH,
+        inW,
+        weights,
+        bias,
+        inputPlanes,
+        outputPlanes,
+        kW,
+        kH,
+        strideX,
+        strideY,
+        padX,
+        padY,
+        alpha,
+        outH,
+        outW,
+      );
+      return fromData(outputPlanes, outH, outW, data);
+    } catch {
+      disableWasm();
+    }
   }
 
   const out = createTensor(outputPlanes, outH, outW);

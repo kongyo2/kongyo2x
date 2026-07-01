@@ -1,6 +1,6 @@
 import type { Tensor } from "../core/tensor.js";
 import { createTensor, fromData } from "../core/tensor.js";
-import { getWasm } from "../wasm/loader.js";
+import { getWasm, disableWasm } from "../wasm/loader.js";
 
 export interface ConvLayerParams {
   cin: number;
@@ -62,20 +62,24 @@ export function convForward(input: Tensor, layer: ConvLayerParams): Tensor {
 
   const wasm = getWasm();
   if (wasm) {
-    const data = wasm.convForwardTrain(
-      input.data,
-      input.height,
-      input.width,
-      layer.weights,
-      layer.bias,
-      cin,
-      cout,
-      kh,
-      kw,
-      outH,
-      outW,
-    );
-    return fromData(cout, outH, outW, data);
+    try {
+      const data = wasm.convForwardTrain(
+        input.data,
+        input.height,
+        input.width,
+        layer.weights,
+        layer.bias,
+        cin,
+        cout,
+        kh,
+        kw,
+        outH,
+        outW,
+      );
+      return fromData(cout, outH, outW, data);
+    } catch {
+      disableWasm();
+    }
   }
 
   const k = cin * kh * kw;
@@ -115,23 +119,27 @@ export function convBackward(
 
   const wasm = getWasm();
   if (wasm) {
-    const din = wasm.convBackwardTrain(
-      input.data,
-      inH,
-      inW,
-      layer.weights,
-      dPre.data,
-      outH,
-      outW,
-      layer.gradWeights,
-      layer.gradBias,
-      cin,
-      cout,
-      kh,
-      kw,
-      computeGradInput,
-    );
-    return din ? fromData(cin, inH, inW, din) : null;
+    try {
+      const din = wasm.convBackwardTrain(
+        input.data,
+        inH,
+        inW,
+        layer.weights,
+        dPre.data,
+        outH,
+        outW,
+        layer.gradWeights,
+        layer.gradBias,
+        cin,
+        cout,
+        kh,
+        kw,
+        computeGradInput,
+      );
+      return din ? fromData(cin, inH, inW, din) : null;
+    } catch {
+      disableWasm();
+    }
   }
 
   const k = cin * kh * kw;
